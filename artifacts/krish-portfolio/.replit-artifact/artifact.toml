@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Krish Portfolio"
+description = "A cinematic, responsive personal portfolio for Krish, an aspiring software developer, featuring a full-bleed video hero, interactive project showcase, skills, and contact call-to-action."
+version = "1.0.0"
+id = "artifacts/krish-portfolio"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19930
+
+[services.development]
+run = "pnpm --filter @workspace/krish-portfolio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/krish-portfolio", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/krish-portfolio/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19930"
+BASE_PATH = "/"
