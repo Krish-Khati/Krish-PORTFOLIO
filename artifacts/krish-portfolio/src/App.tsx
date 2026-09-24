@@ -6,6 +6,12 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import BlogPage from '@/pages/blog';
+import BlogPostPage from '@/pages/blog-post';
+import { SiteNav } from '@/components/site-nav';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteEffects } from '@/components/site-effects';
+import { HeroParticles } from '@/components/hero-particles';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
@@ -222,15 +228,10 @@ function CustomCursor() {
 }
 
 function Home() {
-  const navRef = useRef<HTMLElement>(null);
-
+  // Arriving from another page with a #hash (e.g. /#contact from the blog): scroll to it once mounted.
   useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 50);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    const id = window.location.hash.slice(1);
+    if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView());
   }, []);
 
   useEffect(() => {
@@ -293,21 +294,7 @@ useEffect(() => {
 
   return (
     <main className="site-shell">
-      <nav className="navbar" ref={navRef} aria-label="Main navigation">
-        <ul className="nav-links">
-          <li><a href="#top" className="active">Home</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="#skills">Skills</a></li>
-          <li><a href="#work">Projects</a></li>
-          <li><a href="#contact">Contact</a></li>
-        </ul>
-        <div className="socials">
-          <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
-          <a href="https://www.linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
-          <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
-          <a href="https://github.com/KRRISH972" target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
-        </div>
-      </nav>
+      <SiteNav />
 
       <section className="hero" id="top" aria-label="Krish introduction">
         <video
@@ -319,6 +306,8 @@ useEffect(() => {
           playsInline
           aria-hidden="true"
         />
+        <div className="hero-overlay" aria-hidden="true" />
+        <HeroParticles />
         <div className="hero-content">
           <p className="hero-greet hero-anim hero-anim-1">Hi, I'm <span className="line" /></p>
           <h1 className="hero-name" data-testid="text-hero-title">
@@ -463,7 +452,7 @@ useEffect(() => {
           </div>
           <div className="project-list" data-testid="list-projects">
             {projects.map((project) => (
-              <article className="project-row depth-object reveal" key={project.number} data-testid={`card-project-${project.number}`}>
+              <article className="project-row reveal" data-tilt key={project.number} data-testid={`card-project-${project.number}`}>
                 <div className="project-number">{project.number}</div>
                 <div className="project-name">{project.name}</div>
                 <div className="project-description">{project.description}</div>
@@ -593,10 +582,7 @@ useEffect(() => {
         </div>
       </section>
 
-      <footer className="site-footer">
-        <span>Krish / aspiring software developer</span>
-        <span>Pundri, Haryana / made with momentum</span>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }
@@ -606,6 +592,8 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/blog" component={BlogPage} />
+        <Route path="/blog/:slug" component={BlogPostPage} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
@@ -621,6 +609,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <CustomCursor />
+      <SiteEffects />
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <Router />

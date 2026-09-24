@@ -12,6 +12,27 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-24 — Blog page + site-wide animations
+
+**New: Blog (`/blog`, `/blog/:slug`)**
+- Added `src/data/blog.ts` (typed posts: title, excerpt, category, date, content blocks — paragraph / heading / quote / list / code) with 5 starter posts (Journey, Learning, Projects, AI, Marketing).
+- `src/pages/blog.tsx`: animated hero ("Thoughts on building & learning."), floating teal glow orbs, live search, category filter chips, featured latest post + staggered card grid with reading time.
+- `src/pages/blog-post.tsx`: article page with staggered block entrance, styled headings / quotes / bullet lists / code blocks, and Older / Newer post navigation; unknown slugs fall back to 404.
+- Routes registered in `App.tsx`; "Blog" link added to the navbar and footer.
+
+**Navigation**
+- Navbar extracted to `src/components/site-nav.tsx`: scroll-spy highlights the section in view, links work from blog pages (go back to Home + scroll to the section), and a new mobile hamburger menu (links were hidden on phones before).
+- Footer extracted to `src/components/site-footer.tsx`.
+
+**Animations (whole site)**
+- `site-effects.tsx`: teal scroll-progress bar at the top, back-to-top button, magnetic hover on the main buttons, 3D tilt on project rows and blog cards, subtle hero-video parallax.
+- `hero-particles.tsx`: canvas particle network in the hero that links to the cursor; pauses when off-screen or tab hidden.
+- CSS: shine sweep across the "Krish" name, sheen on the primary button, glow + wiggle on tool icons, gradient underline + teal title on project hover, rotating light border on the My Story card, pulsing timeline dots, marquee pauses on hover.
+- All new motion respects `prefers-reduced-motion`.
+
+**Verification**
+- `pnpm --filter @workspace/krish-portfolio run typecheck` ✅ and production `vite build` ✅.
+
 ### 2026-09-23 — Launch build (major)
 
 **Global / Architecture**
@@ -81,9 +102,6 @@ so the full evolution of the site is visible at a glance.
 - All sections run IntersectionObserver-based entrance animations (one-shot, ease-out).
 - Workflow notes: typecheck via `pnpm --filter @workspace/krish-portfolio run typecheck`; dev server on `PORT=5173 BASE_PATH=/`.
 - Fixed dead CSS, removed unused principles styles, curated responsive breakpoints.
-
-### <next-date> — (pending)
-- Add new work here at the end of each working day.
 
 ---
 
