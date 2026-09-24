@@ -254,7 +254,7 @@ function Home() {
   }, []);
 
 useEffect(() => {
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>('.tl-in, .mpill-in, .hline-in, .vcta-in'));
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('.tl-in, .mpill-in, .hline-in, .vcta-in, .fline-in, .fbtn-in, .fin-in'));
     const observer = new IntersectionObserver(
       (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add('is-in')),
       { threshold: 0.2 },
