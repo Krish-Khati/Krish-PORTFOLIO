@@ -44,9 +44,19 @@ so the full evolution of the site is visible at a glance.
 - Projects data moved to `src/data/projects.ts` (shared by the site and the admin seed).
 - The public site still reads the static data files — admin edits don't show on the site until Supabase is connected.
 
+**Supabase connected (live database)**
+- Supabase project "PORTFOLIO" (Mumbai region) created by the owner; `schema.sql` + `seed.sql` run, admin user created, public sign-ups turned OFF.
+- `src/lib/supabase.ts` client reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from `artifacts/krish-portfolio/.env` (git-ignored; template in `.env.example`).
+- Admin: real Supabase email/password login; all screens read/write the database; topbar shows "Live · Supabase"; demo reset hidden when live.
+- Site: blog list + post pages, projects, hero roles/description, contact details and social links now come from the database (static files remain the fallback when no keys are set).
+- Contact form saves messages into the admin inbox (falls back to opening the mail app if saving fails).
+- `supabase/seed.sql`: starter posts, projects and settings; message length limits added to `messages`.
+
 **Verification**
 - `pnpm --filter @workspace/krish-portfolio run typecheck` ✅ and production `vite build` ✅.
 - Editor text ↔ blocks conversion round-trips all 5 existing posts exactly ✅.
+- Live database checks as a public visitor: 5 published posts, 5 projects and settings readable ✅; messages NOT readable ✅; creating a post blocked (401) ✅; sign-up blocked ✅; contact-form message saved (201) ✅; oversized message rejected ✅.
+- Dev server loads `/`, `/blog`, `/admin/login` with the Supabase URL picked up ✅. Admin login itself to be confirmed by the owner (password known only to them).
 
 ### 2026-09-23 — Launch build (major)
 
