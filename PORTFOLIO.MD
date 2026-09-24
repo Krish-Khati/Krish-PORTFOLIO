@@ -30,8 +30,23 @@ so the full evolution of the site is visible at a glance.
 - CSS: shine sweep across the "Krish" name, sheen on the primary button, glow + wiggle on tool icons, gradient underline + teal title on project hover, rotating light border on the My Story card, pulsing timeline dots, marquee pauses on hover.
 - All new motion respects `prefers-reduced-motion`.
 
+**New: Admin panel (`/admin`) — UI only, Supabase to be connected later**
+- Login screen (`/admin/login`) with animated grid + glow orbs. **Demo sign-in only** (any valid email + 6-char password) — not real security until Supabase Auth is wired in.
+- Dashboard: greeting, animated stat cards (published / drafts / projects / unread), recent posts, latest messages, quick actions.
+- Blog posts: table with All / Published / Drafts tabs, search, edit, delete (confirm dialog).
+- Post editor: title, excerpt, simple text formatting (`##` heading, `>` quote, `-` list, code fences) with toolbar, Write / Split / Preview modes using the real blog styles, slug auto-generated from the title, category, date, draft/publish, Ctrl+S save, unsaved-changes warning.
+- Projects: card grid with add/edit modal, reorder up/down, delete.
+- Messages: inbox with unread badge, reading pane, mark read/unread, reply by email, delete (mobile: list → detail).
+- Settings: profile, typewriter roles, social links, database status card, "reset demo data".
+- Responsive sidebar (off-canvas drawer on mobile), entrance animations, skeleton loaders, toasts; custom cursor/site effects disabled inside admin.
+- Data layer `src/admin/api.ts`: every screen goes through its async functions; for now they use demo data in the browser's localStorage. Swap their bodies for Supabase queries later.
+- `supabase/schema.sql`: ready-to-run tables (posts, projects, messages, site_settings) + Row Level Security policies (not applied yet).
+- Projects data moved to `src/data/projects.ts` (shared by the site and the admin seed).
+- The public site still reads the static data files — admin edits don't show on the site until Supabase is connected.
+
 **Verification**
 - `pnpm --filter @workspace/krish-portfolio run typecheck` ✅ and production `vite build` ✅.
+- Editor text ↔ blocks conversion round-trips all 5 existing posts exactly ✅.
 
 ### 2026-09-23 — Launch build (major)
 

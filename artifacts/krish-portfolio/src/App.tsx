@@ -12,42 +12,11 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
 import { HeroParticles } from '@/components/hero-particles';
+import { projects } from '@/data/projects';
+import AdminApp from '@/admin/admin-app';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
-
-const projects = [
-  {
-    number: '01',
-    name: 'Fitness Temple',
-    description: 'A fitness-themed website built to practice front-end structure, content hierarchy, and styling.',
-    url: 'https://github.com/KRRISH972/FITNESS_TEMPLE',
-  },
-  {
-    number: '02',
-    name: 'LinguaBridge',
-    description: 'A language-learning and translation project exploring the small details that help communication travel.',
-    url: 'https://github.com/KRRISH972/LINGUABRIDGE-',
-  },
-  {
-    number: '03',
-    name: 'Memory Match Game',
-    description: 'An interactive memory game built around logic, state changes, and event-driven programming.',
-    url: 'https://github.com/KRRISH972/MEMORY-MATCH',
-  },
-  {
-    number: '04',
-    name: 'Calculator',
-    description: 'A functional calculator application focused on core programming logic and arithmetic operations.',
-    url: '',
-  },
-  {
-    number: '05',
-    name: 'M2F Gym Website',
-    description: 'A clean gym and fitness business website designed to present services and information clearly.',
-    url: '',
-  },
-];
 
 const tools: { name: string; id: string; icon: LucideIcon }[] = [
   { name: 'Claude', id: 'claude', icon: Sparkles },
@@ -594,9 +563,22 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/blog" component={BlogPage} />
         <Route path="/blog/:slug" component={BlogPostPage} />
+        <Route path="/admin" nest component={AdminApp} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
+  );
+}
+
+// Custom cursor and scroll effects belong to the public site, not the admin panel.
+function SiteChrome() {
+  const [location] = useLocation();
+  if (location.startsWith('/admin')) return null;
+  return (
+    <>
+      <CustomCursor />
+      <SiteEffects />
+    </>
   );
 }
 
@@ -608,10 +590,9 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <CustomCursor />
-      <SiteEffects />
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <SiteChrome />
           <Router />
         </WouterRouter>
         <Toaster />
