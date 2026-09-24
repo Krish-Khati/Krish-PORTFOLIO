@@ -4,10 +4,12 @@ import { Link } from 'wouter';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import NotFound from '@/pages/not-found';
-import { blogPosts, formatPostDate, getPost, readingMinutes } from '@/data/blog';
+import { formatPostDate, readingMinutes } from '@/data/blog';
+import { usePublishedPosts } from '@/data/live';
 
 export default function BlogPostPage({ params }: { params: { slug: string } }) {
-  const post = getPost(params.slug);
+  const { data: posts, isLoading } = usePublishedPosts();
+  const post = posts?.find((p) => p.slug === params.slug);
 
   useEffect(() => {
     if (!post) return;
@@ -16,11 +18,19 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
     return () => {
       document.title = 'Krish — Aspiring Software Developer';
     };
-  }, [post]);
+  }, [post?.slug, post?.title]);
 
+  if (isLoading) {
+    return (
+      <main className="site-shell blog-shell">
+        <SiteNav onBlog />
+        <div className="post"><div className="post-inner"><div className="blog-card blog-card-skeleton" style={{ height: 320 }} /></div></div>
+      </main>
+    );
+  }
   if (!post) return <NotFound />;
 
-  const sorted = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date));
+  const sorted = posts ?? [];
   const index = sorted.findIndex((p) => p.slug === post.slug);
   const newer = sorted[index - 1];
   const older = sorted[index + 1];

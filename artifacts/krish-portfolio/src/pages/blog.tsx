@@ -3,11 +3,14 @@ import { ArrowRight, Clock, Search } from 'lucide-react';
 import { Link } from 'wouter';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
-import { blogCategories, blogPosts, formatPostDate, readingMinutes } from '@/data/blog';
+import { formatPostDate, readingMinutes } from '@/data/blog';
+import { usePublishedPosts } from '@/data/live';
 
 export default function BlogPage() {
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
+  const { data: allPosts, isLoading, isError } = usePublishedPosts();
+  const categories = useMemo(() => ['All', ...Array.from(new Set((allPosts ?? []).map((p) => p.category)))], [allPosts]);
 
   useEffect(() => {
     document.title = 'Blog — Krish';
@@ -19,11 +22,10 @@ export default function BlogPage() {
 
   const posts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...blogPosts]
-      .sort((a, b) => b.date.localeCompare(a.date))
+    return (allPosts ?? [])
       .filter((p) => category === 'All' || p.category === category)
       .filter((p) => !q || `${p.title} ${p.excerpt} ${p.category}`.toLowerCase().includes(q));
-  }, [category, query]);
+  }, [allPosts, category, query]);
 
   return (
     <main className="site-shell blog-shell">
@@ -55,7 +57,7 @@ export default function BlogPage() {
               />
             </label>
             <div className="blog-chips" role="group" aria-label="Filter by category">
-              {blogCategories.map((c) => (
+              {categories.map((c) => (
                 <button
                   key={c}
                   type="button"
@@ -73,8 +75,14 @@ export default function BlogPage() {
 
       <section className="blog-list-section">
         <div className="section-inner">
-          {posts.length === 0 ? (
-            <p className="blog-empty">No posts match that search yet.</p>
+          {isLoading ? (
+            <div className="blog-grid" aria-busy="true">
+              {[0, 1, 2].map((i) => <div key={i} className="blog-card blog-card-skeleton" />)}
+            </div>
+          ) : isError ? (
+            <p className="blog-empty">Couldn't load posts right now. Please try again in a moment.</p>
+          ) : posts.length === 0 ? (
+            <p className="blog-empty">{allPosts?.length ? 'No posts match that search yet.' : 'No posts published yet.'}</p>
           ) : (
             <div className="blog-grid" data-testid="list-blog">
               {posts.map((post, i) => (

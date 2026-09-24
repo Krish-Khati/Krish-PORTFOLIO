@@ -23,9 +23,10 @@ create table if not exists projects (
 
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
-  name text not null,
-  email text not null,
-  message text not null,
+  -- limits keep the public contact form from being used to dump huge payloads
+  name text not null check (char_length(name) between 1 and 200),
+  email text not null check (char_length(email) between 3 and 320),
+  message text not null check (char_length(message) between 1 and 5000),
   created_at timestamptz not null default now(),
   read boolean not null default false
 );

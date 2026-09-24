@@ -726,6 +726,12 @@ button { font: inherit; }
 .blog-card-cta { display: inline-flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; color: #2ecc71; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; }
 .blog-card-cta svg { transition: transform .3s ease; }
 .blog-card:hover .blog-card-cta svg { transform: translateX(5px); }
+.blog-card-skeleton {
+  min-height: 220px;
+  background: linear-gradient(90deg, #131e1b 0%, #1a2925 50%, #131e1b 100%); background-size: 200% 100%;
+  animation: cardIn .5s ease backwards, skeletonShimmer 1.3s linear infinite;
+}
+@keyframes skeletonShimmer { to { background-position: -200% 0; } }
 .blog-empty { color: #8a9a95; font-family: 'Inter', sans-serif; text-align: center; padding: 60px 0; }
 
 /* Single post */

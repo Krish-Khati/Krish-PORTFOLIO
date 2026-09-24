@@ -12,7 +12,8 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
 import { HeroParticles } from '@/components/hero-particles';
-import { projects } from '@/data/projects';
+import { sendContactMessage, useProjects, useSiteSettings } from '@/data/live';
+import { toast } from '@/hooks/use-toast';
 import AdminApp from '@/admin/admin-app';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
@@ -70,20 +71,18 @@ function StatCounter({ value, suffix, label }: { value: number; suffix: string; 
   );
 }
 
-const typewriterRoles = ['Web Developer', 'Digital Marketer', 'AI Enthusiast'];
-
-function Typewriter() {
+function Typewriter({ roles }: { roles: string[] }) {
   const [text, setText] = useState('');
   const [roleIndex, setRoleIndex] = useState(0);
 
   useEffect(() => {
-    const current = typewriterRoles[roleIndex];
+    const current = roles[roleIndex % roles.length] ?? '';
     let charIndex = 0;
     let timer: ReturnType<typeof setTimeout>;
 
     const erase = () => {
       if (charIndex === 0) {
-        setRoleIndex((i) => (i + 1) % typewriterRoles.length);
+        setRoleIndex((i) => (i + 1) % Math.max(roles.length, 1));
         return;
       }
       charIndex -= 1;
@@ -103,7 +102,7 @@ function Typewriter() {
 
     timer = setTimeout(type, 0);
     return () => clearTimeout(timer);
-  }, [roleIndex]);
+  }, [roleIndex, roles]);
 
   return (
     <span className="typewriter-text" data-testid="text-hero-role">
@@ -197,6 +196,10 @@ function CustomCursor() {
 }
 
 function Home() {
+  const settings = useSiteSettings();
+  const { data: projectList = [] } = useProjects();
+  const [sending, setSending] = useState(false);
+
   // Arriving from another page with a #hash (e.g. /#contact from the blog): scroll to it once mounted.
   useEffect(() => {
     const id = window.location.hash.slice(1);
@@ -221,9 +224,9 @@ function Home() {
     );
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, []);
+  }, [projectList]);
 
-useEffect(() => {
+  useEffect(() => {
     const nodes = Array.from(document.querySelectorAll<HTMLElement>('.tl-in, .mpill-in, .hline-in, .vcta-in, .fline-in, .fbtn-in, .fin-in'));
     const observer = new IntersectionObserver(
       (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add('is-in')),
@@ -253,12 +256,29 @@ useEffect(() => {
     return () => observer.disconnect();
   }, []);
 
-  const handleContactSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleContactSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const subject = data.get('name') ? `Portfolio message from ${data.get('name')}` : 'Portfolio message';
-    const body = data.get('message') ? String(data.get('message')) : '';
-    window.location.href = `mailto:dhimankrish10@gmail.com?subject=${encodeURIComponent(String(subject))}&body=${encodeURIComponent(body)}`;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get('name') ?? '').trim();
+    const email = String(data.get('email') ?? '').trim();
+    const message = String(data.get('message') ?? '').trim();
+
+    // Save to the admin inbox when the database is connected; otherwise open the mail app.
+    setSending(true);
+    try {
+      if (await sendContactMessage({ name, email, message })) {
+        form.reset();
+        toast({ title: 'Message sent 🚀', description: "Thanks! I'll get back to you soon." });
+        return;
+      }
+    } catch {
+      toast({ title: "Couldn't send right now", description: 'Opening your email app instead.' });
+    } finally {
+      setSending(false);
+    }
+    const subject = name ? `Portfolio message from ${name}` : 'Portfolio message';
+    window.location.href = `mailto:${settings.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
   };
 
   return (
@@ -297,11 +317,8 @@ useEffect(() => {
               <span className="name-dot">.</span>
             </span>
           </h1>
-          <h2 className="hero-role hero-anim hero-anim-3"><Typewriter /></h2>
-          <p className="hero-desc hero-anim hero-anim-4">
-            I'm passionate about creating modern web experiences, exploring the power
-            of AI and digital marketing, and building things that make an impact.
-          </p>
+          <h2 className="hero-role hero-anim hero-anim-3"><Typewriter roles={settings.roles} /></h2>
+          <p className="hero-desc hero-anim hero-anim-4">{settings.tagline}</p>
           <div className="hero-buttons hero-anim hero-anim-5">
             <a href="#work" className="btn-primary">View My Work <ArrowRight size={15} /></a>
             <a href="#resume" className="btn-secondary">Download Resume <Download size={14} /></a>
@@ -417,10 +434,10 @@ useEffect(() => {
               <div className="section-label reveal">04 / Selected practice</div>
               <h2 className="section-title reveal reveal-delay-1">Things built<br /><span className="highlight">to learn.</span></h2>
             </div>
-            <p className="reveal reveal-delay-2">Five projects. Each one a sharper question, a new constraint, and another reason to keep going.</p>
+            <p className="reveal reveal-delay-2">{projectList.length || 'A few'} projects. Each one a sharper question, a new constraint, and another reason to keep going.</p>
           </div>
           <div className="project-list" data-testid="list-projects">
-            {projects.map((project) => (
+            {projectList.map((project) => (
               <article className="project-row reveal" data-tilt key={project.number} data-testid={`card-project-${project.number}`}>
                 <div className="project-number">{project.number}</div>
                 <div className="project-name">{project.name}</div>
@@ -531,21 +548,21 @@ useEffect(() => {
                 <label htmlFor="contact-message" className="visually-hidden">Message</label>
                 <textarea id="contact-message" name="message" placeholder="Message" rows={4} required />
               </div>
-              <button type="submit" className="contact-send fbtn-in" style={{ transitionDelay: '0.4s' }}>Send 🚀</button>
+              <button type="submit" className="contact-send fbtn-in" style={{ transitionDelay: '0.4s' }} disabled={sending}>{sending ? 'Sending…' : 'Send 🚀'}</button>
               <div className="contact-bottom fin-in" style={{ transitionDelay: '0.5s' }}>
-                <div className="contact-location"><MapPin size={16} />Pundri, Kaithal, Haryana, India</div>
+                <div className="contact-location"><MapPin size={16} />{settings.location}</div>
                 <div className="contact-socials">
-                  <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
-                  <a href="https://www.linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
-                  <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
-                  <a href="https://github.com/KRRISH972" target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
+                  <a href={settings.instagram} target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
+                  <a href={settings.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
+                  <a href={settings.youtube} target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
+                  <a href={settings.github} target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
                 </div>
               </div>
             </form>
             <div className="contact-details">
-              <a href="mailto:dhimankrish10@gmail.com" data-testid="link-email"><Mail size={14} /> dhimankrish10@gmail.com</a>
-              <a href="tel:+919306091154" data-testid="link-phone"><Phone size={14} /> +91 93060 91154</a>
-              <a href="https://github.com/KRRISH972" target="_blank" rel="noreferrer" data-testid="link-github-contact"><Github size={14} /> github.com/KRRISH972</a>
+              <a href={`mailto:${settings.email}`} data-testid="link-email"><Mail size={14} /> {settings.email}</a>
+              <a href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`} data-testid="link-phone"><Phone size={14} /> {settings.phone}</a>
+              <a href={settings.github} target="_blank" rel="noreferrer" data-testid="link-github-contact"><Github size={14} /> {settings.github.replace(/^https?:\/\/(www\.)?/, '')}</a>
             </div>
           </div>
         </div>

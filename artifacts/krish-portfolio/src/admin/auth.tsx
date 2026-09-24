@@ -1,22 +1,24 @@
-import { createContext, type ReactNode, useCallback, useContext, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 /*
- * DEMO sign-in only — this is NOT security. Anything checked in the browser can be bypassed.
- * When Supabase is connected, replace signIn/signOut with supabase.auth.signInWithPassword /
- * supabase.auth.signOut and protect the tables with Row Level Security (see supabase/schema.sql).
+ * With Supabase configured, sign-in uses Supabase Auth (email + password) and the database's
+ * Row Level Security decides what a signed-in user may change.
+ * Without it, a DEMO sign-in is used — that is NOT security, anything in the browser can be bypassed.
  */
 
 type Session = { email: string };
 type AuthValue = {
   session: Session | null;
+  loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 };
 
 const KEY = 'krish-admin-session';
 const AuthContext = createContext<AuthValue | null>(null);
 
-function readSession(): Session | null {
+function readDemoSession(): Session | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as Session) : null;
@@ -26,11 +28,29 @@ function readSession(): Session | null {
 }
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(readSession);
+  const [session, setSession] = useState<Session | null>(() => (supabase ? null : readDemoSession()));
+  const [loading, setLoading] = useState(!!supabase);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session?.user.email ? { email: data.session.user.email } : null);
+      setLoading(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s?.user.email ? { email: s.user.email } : null);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    await new Promise((r) => setTimeout(r, 450));
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Enter a valid email address.');
+    if (supabase) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 450));
     if (password.length < 6) throw new Error('Password must be at least 6 characters.');
     const next = { email };
     try {
@@ -41,7 +61,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setSession(next);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+      return;
+    }
     try {
       sessionStorage.removeItem(KEY);
     } catch {
@@ -50,7 +74,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
-  return <AuthContext.Provider value={{ session, signIn, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, loading, signIn, signOut }}>{children}</AuthContext.Provider>;
 }
 
 export function useAdminAuth() {

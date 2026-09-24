@@ -122,7 +122,7 @@ export default function SettingsPage() {
           <h2 className="adm-section-title">Database</h2>
           <p className="adm-muted adm-small">
             {isSupabaseConnected
-              ? 'Connected to Supabase.'
+              ? 'Connected to Supabase. Changes are saved to the database and show up on the live site.'
               : 'Not connected yet. All admin data is stored only in this browser. Connecting Supabase will make it permanent and live on the site.'}
           </p>
         </div>
@@ -131,6 +131,7 @@ export default function SettingsPage() {
         </span>
       </section>
 
+      {!isSupabaseConnected && (
       <section className="adm-card adm-danger-zone adm-rise" style={{ animationDelay: '.24s' }}>
         <div className="adm-grow">
           <h2 className="adm-section-title">Reset demo data</h2>
@@ -140,6 +141,7 @@ export default function SettingsPage() {
           <RotateCcw size={16} /> Reset
         </button>
       </section>
+      )}
 
       <ConfirmDialog
         open={confirmReset}

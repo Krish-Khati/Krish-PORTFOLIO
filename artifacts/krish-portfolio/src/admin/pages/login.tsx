@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAdminAuth } from '../auth';
+import { isSupabaseConnected } from '../api';
 
 export default function LoginPage() {
   const { signIn } = useAdminAuth();
@@ -60,9 +61,11 @@ export default function LoginPage() {
           {busy ? <span className="adm-spinner" /> : <>Sign in <ArrowRight size={16} /></>}
         </button>
 
-        <p className="adm-login-note">
-          Demo mode: any valid email and a 6+ character password will work. Real sign-in arrives with Supabase.
-        </p>
+        {!isSupabaseConnected && (
+          <p className="adm-login-note">
+            Demo mode: any valid email and a 6+ character password will work. Real sign-in arrives with Supabase.
+          </p>
+        )}
       </form>
     </div>
   );

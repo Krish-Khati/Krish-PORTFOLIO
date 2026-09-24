@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Github, Instagram, Linkedin, Menu, X, Youtube } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { useSiteSettings } from '@/data/live';
 
 const sections = [
   { id: 'top', label: 'Home' },
@@ -15,6 +16,7 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
   const [active, setActive] = useState('top');
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
+  const settings = useSiteSettings();
 
   // Hash links stay in-page on Home; from other pages they go back to Home first.
   const prefix = location === '/' ? '' : import.meta.env.BASE_URL;
@@ -61,10 +63,10 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
         </li>
       </ul>
       <div className="socials">
-        <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
-        <a href="https://www.linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
-        <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
-        <a href="https://github.com/KRRISH972" target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
+        <a href={settings.instagram} target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
+        <a href={settings.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
+        <a href={settings.youtube} target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
+        <a href={settings.github} target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
         <button
           type="button"
           className="nav-toggle"
