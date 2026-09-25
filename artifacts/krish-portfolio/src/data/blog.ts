@@ -113,6 +113,20 @@ export const blogPosts: BlogPost[] = [
 
 export const blogCategories = ['All', ...Array.from(new Set(blogPosts.map((p) => p.category)))];
 
+// Cover photos shipped with the site (public/blog-covers/<slug>.jpg). A cover set in the admin panel takes priority.
+const bundledCovers = new Set([
+  'learning-to-code-with-just-a-laptop',
+  'python-c-and-cpp-what-each-one-taught-me',
+  'what-a-memory-match-game-taught-me-about-state',
+  'how-i-use-ai-tools-without-outsourcing-my-thinking',
+  'what-digital-marketing-with-ai-taught-me',
+]);
+
+export function withCover<T extends BlogPost>(post: T): T {
+  if (post.cover || !bundledCovers.has(post.slug)) return post;
+  return { ...post, cover: `${import.meta.env.BASE_URL}blog-covers/${post.slug}.jpg` };
+}
+
 export function getPost(slug: string) {
   return blogPosts.find((p) => p.slug === slug);
 }

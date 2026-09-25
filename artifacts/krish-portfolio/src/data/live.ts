@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { blogPosts, type BlogPost } from './blog';
+import { blogPosts, type BlogPost, withCover } from './blog';
 import { projects as staticProjects, type Project } from './projects';
 
 /*
@@ -34,7 +34,7 @@ export const defaultPublicSettings: PublicSettings = {
   github: 'https://github.com/KRRISH972',
 };
 
-const staticPosts = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date));
+const staticPosts = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date)).map(withCover);
 
 export function usePublishedPosts() {
   return useQuery({
@@ -47,7 +47,7 @@ export function usePublishedPosts() {
         .eq('status', 'published')
         .order('date', { ascending: false });
       if (error) throw error;
-      return data as BlogPost[];
+      return (data as BlogPost[]).map(withCover);
     },
     initialData: supabase ? undefined : staticPosts,
     staleTime: 60_000,
