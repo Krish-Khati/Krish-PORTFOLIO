@@ -43,7 +43,7 @@ export function usePublishedPosts() {
       if (!supabase) return staticPosts;
       const { data, error } = await supabase
         .from('posts')
-        .select('slug, title, excerpt, category, date, blocks')
+        .select('*') // '*' so the query keeps working whether or not the optional cover column exists yet
         .eq('status', 'published')
         .order('date', { ascending: false });
       if (error) throw error;

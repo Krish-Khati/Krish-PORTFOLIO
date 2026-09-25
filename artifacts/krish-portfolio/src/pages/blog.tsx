@@ -9,9 +9,8 @@ import { SiteFooter } from '@/components/site-footer';
 import { formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
 
-// Optional fields a post may carry (e.g. from Supabase); the page falls back gracefully without them.
-type PostExtras = { cover?: string | null; featured?: boolean | null };
-const extras = (p: BlogPost) => p as BlogPost & PostExtras;
+// Optional flag a post may carry (e.g. from Supabase); without it the newest posts are featured.
+const isFeatured = (p: BlogPost) => !!(p as BlogPost & { featured?: boolean | null }).featured;
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   All: LayoutGrid,
@@ -26,7 +25,7 @@ const categoryIcon = (c: string) => CATEGORY_ICONS[c] ?? Tag;
 const SLIDE_MS = 5000;
 
 function PostCover({ post, className }: { post: BlogPost; className: string }) {
-  const cover = extras(post).cover;
+  const { cover } = post;
   const Icon = categoryIcon(post.category);
   return (
     <div className={className}>
@@ -152,7 +151,7 @@ export default function BlogPage() {
     return m;
   }, [all]);
   const featured = useMemo(() => {
-    const flagged = all.filter((p) => extras(p).featured);
+    const flagged = all.filter(isFeatured);
     return (flagged.length ? flagged : all).slice(0, 4);
   }, [all]);
   const latest = all[0];

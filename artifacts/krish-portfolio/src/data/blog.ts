@@ -11,6 +11,7 @@ export type BlogPost = {
   excerpt: string;
   category: 'Journey' | 'Learning' | 'Projects' | 'AI' | 'Marketing';
   date: string; // ISO yyyy-mm-dd
+  cover?: string; // cover image URL; posts without one get a themed gradient
   blocks: BlogBlock[];
 };
 

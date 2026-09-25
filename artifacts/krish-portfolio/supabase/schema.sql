@@ -10,6 +10,7 @@ create table if not exists posts (
   date date not null default current_date,
   status text not null default 'draft' check (status in ('draft', 'published')),
   blocks jsonb not null default '[]'::jsonb,
+  cover text not null default '', -- cover image URL (see add-post-covers.sql for the storage bucket)
   updated_at timestamptz not null default now()
 );
 
@@ -57,3 +58,5 @@ create policy "admin manages settings" on site_settings for all to authenticated
 
 -- Note: "authenticated" means ANY signed-in user. Disable public sign-ups in
 -- Supabase Auth settings so only the admin account exists.
+
+-- Cover image storage: run add-post-covers.sql as well.

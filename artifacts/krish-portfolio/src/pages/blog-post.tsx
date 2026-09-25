@@ -53,6 +53,7 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
           </div>
           <h1 className="post-title blog-anim" style={{ animationDelay: '.25s' }} data-testid="text-post-title">{post.title}</h1>
           <p className="post-lede blog-anim" style={{ animationDelay: '.35s' }}>{post.excerpt}</p>
+          {post.cover && <img className="post-cover blog-anim" style={{ animationDelay: '.4s' }} src={post.cover} alt="" />}
 
           <div className="post-body">
             {post.blocks.map((block, i) => {

@@ -208,13 +208,13 @@ export function resetDemoData() {
 
 type PostRow = {
   id: string; slug: string; title: string; excerpt: string; category: PostCategory;
-  date: string; status: PostStatus; blocks: AdminPost['blocks']; updated_at: string;
+  date: string; status: PostStatus; blocks: AdminPost['blocks']; updated_at: string; cover?: string | null;
 };
 type MessageRow = { id: string; name: string; email: string; message: string; created_at: string; read: boolean };
 
 const toPost = (r: PostRow): AdminPost => ({
   id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt, category: r.category,
-  date: r.date, status: r.status, blocks: r.blocks, updatedAt: r.updated_at,
+  date: r.date, status: r.status, blocks: r.blocks, updatedAt: r.updated_at, cover: r.cover ?? '',
 });
 const toMessage = (r: MessageRow): AdminMessage => ({
   id: r.id, name: r.name, email: r.email, message: r.message, createdAt: r.created_at, read: r.read,
@@ -243,6 +243,9 @@ const remote = {
       ? await sb().from('posts').update(payload).eq('id', id).select().single()
       : await sb().from('posts').insert(payload).select().single();
     if (res.error?.code === '23505') throw new Error(`Another post already uses the URL "${input.slug}".`);
+    if (res.error && /cover/.test(res.error.message)) {
+      throw new Error('Cover images are not set up in the database yet. Run supabase/add-post-covers.sql in the Supabase SQL editor.');
+    }
     return toPost(check(res) as PostRow);
   },
   async deletePost(id: string) {
@@ -302,6 +305,40 @@ const remote = {
     return true;
   },
 };
+
+/* ================= Cover images ================= */
+
+const COVER_BUCKET = 'covers';
+const MAX_COVER_MB = 5;
+const MAX_DEMO_COVER_MB = 1; // demo mode keeps covers in localStorage, which is small
+
+function readAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Uploads an image and returns the URL to store as the post's cover.
+export async function uploadCover(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file (JPG, PNG, WebP or GIF).');
+  const limit = supabase ? MAX_COVER_MB : MAX_DEMO_COVER_MB;
+  if (file.size > limit * 1024 * 1024) throw new Error(`That image is over ${limit} MB. Please use a smaller one.`);
+  if (!supabase) return readAsDataUrl(file);
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `${uid()}.${ext}`;
+  const { error } = await sb().storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: '31536000' });
+  if (error) {
+    if (/bucket/i.test(error.message)) {
+      throw new Error('Cover uploads are not set up yet. Run supabase/add-post-covers.sql in the Supabase SQL editor.');
+    }
+    throw new Error(error.message);
+  }
+  return sb().storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
+}
 
 /* ================= Public API ================= */
 

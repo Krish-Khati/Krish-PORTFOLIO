@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Code2, Columns2, Eye, Heading2, List, PenLine, Quote, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Code2, Columns2, Eye, Heading2, ImagePlus, Link2, List, Loader2, PenLine, Quote, Save, Trash2, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { toast } from '@/hooks/use-toast';
 import type { BlogBlock } from '@/data/blog';
-import { deletePost, getPost, type PostCategory, postCategories, type PostStatus, savePost } from '../api';
+import { deletePost, getPost, type PostCategory, postCategories, type PostStatus, savePost, uploadCover } from '../api';
 import { blocksToText, slugify, textToBlocks, wordCount } from '../content';
 import { ConfirmDialog, Skeleton } from '../ui';
 
@@ -15,11 +15,12 @@ type Draft = {
   category: PostCategory;
   date: string;
   status: PostStatus;
+  cover: string;
   body: string;
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyDraft = (): Draft => ({ title: '', slug: '', excerpt: '', category: 'Journey', date: today(), status: 'draft', body: '' });
+const emptyDraft = (): Draft => ({ title: '', slug: '', excerpt: '', category: 'Journey', date: today(), status: 'draft', cover: '', body: '' });
 
 type View = 'write' | 'split' | 'preview';
 
@@ -41,7 +42,7 @@ export default function PostEditorPage({ id }: { id?: string }) {
   }
 
   const initial: Draft = post
-    ? { title: post.title, slug: post.slug, excerpt: post.excerpt, category: post.category, date: post.date, status: post.status, body: blocksToText(post.blocks) }
+    ? { title: post.title, slug: post.slug, excerpt: post.excerpt, category: post.category, date: post.date, status: post.status, cover: post.cover ?? '', body: blocksToText(post.blocks) }
     : emptyDraft();
 
   return <Editor key={id ?? 'new'} id={id} initial={initial} />;
@@ -77,6 +78,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
         category: next.category,
         date: next.date,
         status: next.status,
+        cover: next.cover.trim(),
         blocks: textToBlocks(next.body),
       }),
     onSuccess: (record, next) => {
@@ -227,6 +229,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
             )}
             {view !== 'write' && (
               <div className="adm-md-preview" aria-label="Preview">
+                {draft.cover && <img className="post-cover adm-preview-cover" src={draft.cover} alt="" />}
                 {draft.title && <h1 className="post-title">{draft.title}</h1>}
                 {draft.excerpt && <p className="post-lede">{draft.excerpt}</p>}
                 <div className="post-body">
@@ -275,6 +278,8 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
             </label>
           </div>
 
+          <CoverPicker value={draft.cover} onChange={(v) => set('cover', v)} />
+
           <div className="adm-card adm-help">
             <h3 className="adm-side-title">Formatting</h3>
             <ul>
@@ -296,6 +301,71 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
         onConfirm={() => remove.mutate()}
         onClose={() => setConfirmDelete(false)}
       />
+    </div>
+  );
+}
+
+function CoverPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => setBroken(false), [value]);
+
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setErr('');
+    setBusy(true);
+    try {
+      onChange(await uploadCover(file));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Upload failed.');
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="adm-card">
+      <h3 className="adm-side-title">Cover image</h3>
+      <div
+        className={`adm-cover-drop${value && !broken ? ' has-image' : ''}`}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files[0]); }}
+      >
+        {value && !broken ? (
+          <>
+            <img src={value} alt="Cover preview" onError={() => setBroken(true)} />
+            <button type="button" className="adm-cover-remove" onClick={() => onChange('')} aria-label="Remove cover image">
+              <X size={15} />
+            </button>
+          </>
+        ) : (
+          <button type="button" className="adm-cover-empty" onClick={() => fileRef.current?.click()} disabled={busy}>
+            {busy ? <Loader2 size={22} className="adm-spin" /> : <ImagePlus size={22} />}
+            <span>{busy ? 'Uploading…' : broken ? "Image couldn't load — pick another" : 'Click or drop an image'}</span>
+            <small>JPG, PNG or WebP · wide images look best</small>
+          </button>
+        )}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+      {value && !broken && (
+        <button type="button" className="adm-btn adm-btn-ghost adm-cover-replace" onClick={() => fileRef.current?.click()} disabled={busy}>
+          {busy ? <Loader2 size={15} className="adm-spin" /> : <ImagePlus size={15} />} {busy ? 'Uploading…' : 'Replace image'}
+        </button>
+      )}
+      <label className="adm-field adm-cover-url">
+        <span><Link2 size={13} /> Or paste an image URL</span>
+        <input
+          value={value.startsWith('data:') ? '' : value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://…"
+          inputMode="url"
+        />
+      </label>
+      {err && <p className="adm-form-error" role="alert">{err}</p>}
     </div>
   );
 }
