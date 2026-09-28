@@ -61,6 +61,11 @@ const RETRY_DELAYS_MS = [15_000, 30_000];
 // inside the GitHub Actions job's 15-minute timeout.
 const TOTAL_MODEL_BUDGET_MS = 10 * 60 * 1000;
 
+// A single request to a model (Gemini or Groq) is aborted if it hasn't responded by this point,
+// so a stalled connection can never hang the whole run — it just becomes a normal failure and
+// generateOnce() moves on to the next model. Every AI request goes through withTimeout() below.
+const MODEL_TIMEOUT_MS = 90_000;
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class HttpError extends Error {
@@ -72,10 +77,36 @@ class HttpError extends Error {
   }
 }
 
+class TimeoutError extends Error {
+  constructor(ms: number) {
+    super(`request timed out after ${ms / 1000}s`);
+    this.name = 'TimeoutError';
+  }
+}
+
+// Runs `fn` with an AbortController that's aborted after MODEL_TIMEOUT_MS, and passes the
+// resulting signal through so both the Gemini SDK's abortSignal option and plain fetch() can use
+// the same mechanism.
+async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new TimeoutError(MODEL_TIMEOUT_MS)), MODEL_TIMEOUT_MS);
+  try {
+    return await fn(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isRetryableError(err: unknown): boolean {
   if (err instanceof ApiError || err instanceof HttpError) return err.status === 503 || err.status === 429;
   const message = err instanceof Error ? err.message : String(err);
   return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|network|socket hang up/i.test(message);
+}
+
+// Timeouts are never retried on the same model (a timeout counts as a failure and generateOnce()
+// moves straight to the next model), so this deliberately doesn't feed into isRetryableError.
+function isOverloadedError(err: unknown): boolean {
+  return (err instanceof ApiError || err instanceof HttpError) && err.status === 503;
 }
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -246,14 +277,21 @@ type ProviderResult = { text: string; model: string };
 
 function callGemini(model: string) {
   return async (prompt: string): Promise<ProviderResult> => {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: { responseMimeType: 'application/json', responseSchema },
+    return withTimeout(async (signal) => {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema,
+          abortSignal: signal,
+          httpOptions: { timeout: MODEL_TIMEOUT_MS },
+        },
+      });
+      const text = response.text;
+      if (!text) throw new Error('Gemini returned an empty response.');
+      return { text, model };
     });
-    const text = response.text;
-    if (!text) throw new Error('Gemini returned an empty response.');
-    return { text, model };
   };
 }
 
@@ -286,13 +324,14 @@ async function callGroqModel(model: string, prompt: string): Promise<ProviderRes
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
 
-  const request = async (withJsonMode: boolean) => {
+  const request = (withJsonMode: boolean) => withTimeout(async (signal) => {
     const body: Record<string, unknown> = { model, messages: [{ role: 'user', content: prompt }] };
     if (withJsonMode) body.response_format = { type: 'json_object' };
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
@@ -305,7 +344,7 @@ async function callGroqModel(model: string, prompt: string): Promise<ProviderRes
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('Groq returned an empty response.');
     return text;
-  };
+  });
 
   let text: string;
   try {
@@ -331,11 +370,13 @@ function providerLabel(choice: ModelChoice) {
 }
 
 // Tries each model in `order`, most-preferred first, until one returns parseable JSON or the
-// overall time budget (`deadline`) runs out.
+// overall time budget (`deadline`) runs out. `onOverloaded` is called for every model that fails
+// with a 503 (after retries), so the caller can remember to avoid starting with it next run.
 async function generateOnce(
   prompt: string,
   order: ModelChoice[],
   deadline: number,
+  onOverloaded: (choice: ModelChoice) => void,
 ): Promise<{ data: unknown; writer: string; usedChoice: ModelChoice }> {
   const failures: string[] = [];
   for (const choice of order) {
@@ -344,10 +385,12 @@ async function generateOnce(
       break;
     }
     const label = providerLabel(choice);
+    console.log(`Trying ${label}…`);
     try {
       const { text, model } = await withRetry(label, () => callProvider(choice, prompt));
       return { data: JSON.parse(text) as unknown, writer: `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${model})`, usedChoice: choice };
     } catch (err) {
+      if (isOverloadedError(err)) onOverloaded(choice);
       const reason = err instanceof Error ? err.message : String(err);
       failures.push(`${label}: ${reason}`);
       console.warn(`${label} could not write the post — trying the next option…`);
@@ -360,15 +403,16 @@ async function generateOnce(
 
 async function generateValidPost(opts: {
   topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[]; order: ModelChoice[];
+  onOverloaded: (choice: ModelChoice) => void;
 }): Promise<{ post: GeneratedPost; writer: string; usedChoice: ModelChoice }> {
   const deadline = Date.now() + TOTAL_MODEL_BUDGET_MS;
 
-  const first = await generateOnce(buildPrompt(opts), opts.order, deadline);
+  const first = await generateOnce(buildPrompt(opts), opts.order, deadline, opts.onOverloaded);
   const firstCheck = validate(first.data, opts.existingTitles);
   if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer, usedChoice: first.usedChoice };
 
   console.warn(`First attempt (${first.writer}) was invalid (${firstCheck.reason}), retrying once…`);
-  const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline);
+  const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline, opts.onOverloaded);
   const secondCheck = validate(second.data, opts.existingTitles);
   if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer, usedChoice: second.usedChoice };
 
@@ -422,7 +466,9 @@ async function main() {
   }
 
   const { data: settingsRow, error: settingsError } = await supabase
-    .from('auto_post_settings').select('publish_automatically, last_working_model').eq('id', 1).maybeSingle();
+    .from('auto_post_settings')
+    .select('publish_automatically, last_working_model, last_overloaded_model')
+    .eq('id', 1).maybeSingle();
   if (settingsError) throw new Error(`Could not read auto-post settings: ${settingsError.message}`);
   const publishAutomatically = settingsRow?.publish_automatically ?? false;
 
@@ -441,9 +487,14 @@ async function main() {
     geminiOverride: GEMINI_MODELS_OVERRIDE,
     groqOverride: GROQ_MODELS_OVERRIDE,
     preferredFirst: parseLastWorkingModel(settingsRow?.last_working_model as string | null | undefined),
+    deprioritize: parseLastWorkingModel(settingsRow?.last_overloaded_model as string | null | undefined),
   });
 
   const attemptLabel = topic?.title ?? '(auto-picked topic)';
+
+  // Tracks the first model (if any) that returns 503 this run, so it can be deprioritized next
+  // run instead of being tried first again while it's still overloaded.
+  let overloadedChoice: ModelChoice | undefined;
 
   try {
     const { post: generated, writer, usedChoice } = await generateValidPost({
@@ -452,6 +503,7 @@ async function main() {
       topicCategory: topic?.category,
       existingTitles,
       order,
+      onOverloaded: (choice) => { overloadedChoice ??= choice; },
     });
 
     const slug = await uniqueSlug(generated.title);
@@ -482,6 +534,14 @@ async function main() {
     const message = err instanceof Error ? err.message : String(err);
     await logRun('failed', attemptLabel, message);
     throw err;
+  } finally {
+    // Reflects this run only: cleared to null when nothing was overloaded this time, so a model
+    // that recovered isn't avoided forever.
+    const { error: overloadedError } = await supabase
+      .from('auto_post_settings')
+      .update({ last_overloaded_model: overloadedChoice ? `${overloadedChoice.provider}:${overloadedChoice.model}` : null })
+      .eq('id', 1);
+    if (overloadedError) console.error(`Could not update overloaded-model memory: ${overloadedError.message}`);
   }
 }
 

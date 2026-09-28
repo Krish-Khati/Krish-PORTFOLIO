@@ -37,13 +37,26 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Every request this module makes gets a hard timeout, so a stalled connection to a provider
+// can never hang the whole run — it just surfaces as a normal rejected promise.
+const REQUEST_TIMEOUT_MS = 90_000;
+
 async function fetchJson(url: string, init?: RequestInit): Promise<any> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`${url.split('?')[0]} -> ${res.status}: ${body.slice(0, 300)}`);
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error(`request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)),
+    REQUEST_TIMEOUT_MS,
+  );
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`${url.split('?')[0]} -> ${res.status}: ${body.slice(0, 300)}`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 /** Lists every Gemini model that supports generateContent, handling pagination. */
@@ -152,6 +165,12 @@ export type PickModelOrderOptions = {
   groqOverride?: string[];
   /** A model to move to the front of the final order, if it's still present in it. */
   preferredFirst?: ModelChoice;
+  /**
+   * A model to move to the back of the final order (e.g. one that returned 503/overloaded last
+   * run), so a run doesn't immediately retry the same busy model first. Ignored if it's also
+   * `preferredFirst`.
+   */
+  deprioritize?: ModelChoice;
   /** Defaults to console.log; pass your own to redirect/collect the picker's log lines. */
   log?: (line: string) => void;
 };
@@ -199,6 +218,18 @@ export async function pickModelOrder(opts: PickModelOrderOptions): Promise<Model
     ...geminiRanked.map((model) => ({ provider: 'gemini' as const, model })),
     ...groqRanked.map((model) => ({ provider: 'groq' as const, model })),
   ];
+
+  const isSameChoice = (a: ModelChoice, b: ModelChoice) => a.provider === b.provider && a.model === b.model;
+
+  if (opts.deprioritize && !(opts.preferredFirst && isSameChoice(opts.deprioritize, opts.preferredFirst))) {
+    const { provider, model } = opts.deprioritize;
+    const idx = order.findIndex((c) => isSameChoice(c, opts.deprioritize!));
+    if (idx !== -1 && idx < order.length - 1) {
+      const [demoted] = order.splice(idx, 1);
+      order = [...order, demoted];
+    }
+    if (idx !== -1) log(`[ai-model-picker] Deprioritizing model that was overloaded (503) last run: ${provider} (${model})`);
+  }
 
   if (opts.preferredFirst) {
     const { provider, model } = opts.preferredFirst;
