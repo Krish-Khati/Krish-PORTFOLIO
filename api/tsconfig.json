@@ -1,0 +1,19 @@
+{
+  // TypeScript settings for the Vercel serverless functions in this folder. Vercel compiles each
+  // api/*.ts file with the nearest tsconfig.json — without this file it would use the repo's root
+  // one (lib es2022, no types), which doesn't declare the Web APIs these functions use (fetch,
+  // Request, Response, AbortSignal). They're built into Vercel's Node 24 runtime, so the DOM lib
+  // declares them here. Checked locally by `pnpm run typecheck:api`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": ["*.ts"]
+}
