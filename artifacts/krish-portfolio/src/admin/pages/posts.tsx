@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Plus, Rocket, Search, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { toast } from '@/hooks/use-toast';
 import { formatPostDate } from '@/data/blog';
-import { type AdminPost, deletePost, listPosts } from '../api';
+import { type AdminPost, deletePost, listPosts, savePost } from '../api';
 import { ConfirmDialog, EmptyState, PageHeader, relativeTime, Skeleton } from '../ui';
 
 type Filter = 'all' | 'published' | 'draft';
@@ -23,6 +23,20 @@ export default function PostsPage() {
       toast({ title: 'Post deleted', description: toDelete?.title });
       setToDelete(null);
     },
+  });
+
+  const publish = useMutation({
+    mutationFn: (post: AdminPost) =>
+      savePost({
+        id: post.id, title: post.title, slug: post.slug, excerpt: post.excerpt,
+        category: post.category, date: post.date, cover: post.cover, blocks: post.blocks,
+        status: 'published',
+      }),
+    onSuccess: (_, post) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'posts'] });
+      toast({ title: 'Post published', description: post.title });
+    },
+    onError: (err) => toast({ title: 'Could not publish', description: err instanceof Error ? err.message : undefined }),
   });
 
   const counts = useMemo(() => ({
@@ -102,6 +116,18 @@ export default function PostsPage() {
                   <td className="adm-hide-md adm-muted adm-nowrap">{relativeTime(p.updatedAt)}</td>
                   <td>
                     <div className="adm-row-actions">
+                      {p.status === 'draft' && (
+                        <button
+                          type="button"
+                          className="adm-icon-btn"
+                          onClick={() => publish.mutate(p)}
+                          disabled={publish.isPending}
+                          aria-label={`Publish ${p.title}`}
+                          title="Publish"
+                        >
+                          <Rocket size={16} />
+                        </button>
+                      )}
                       <Link href={`/posts/${p.id}`} className="adm-icon-btn" aria-label={`Edit ${p.title}`}><Pencil size={16} /></Link>
                       <button type="button" className="adm-icon-btn adm-icon-danger" onClick={() => setToDelete(p)} aria-label={`Delete ${p.title}`}>
                         <Trash2 size={16} />

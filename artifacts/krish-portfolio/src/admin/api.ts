@@ -20,6 +20,10 @@ export type AdminProject = { id: string; name: string; description: string; url:
 export type AdminTool = { id: string; name: string; logoUrl: string; position: number };
 export type AdminStat = { id: string; value: string; label: string; position: number };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
+export type TopicStatus = 'pending' | 'used';
+export type AdminTopic = { id: string; title: string; notes: string; category: PostCategory; status: TopicStatus; position: number };
+export type AutoPostSettings = { publishAutomatically: boolean };
+export type AdminAutoRun = { id: string; ranAt: string; topic: string; status: 'success' | 'failed'; message: string };
 export type SiteSettings = {
   name: string;
   tagline: string;
@@ -38,6 +42,7 @@ export type SiteSettings = {
 type Db = {
   posts: AdminPost[]; projects: AdminProject[]; tools: AdminTool[]; stats: AdminStat[];
   messages: AdminMessage[]; settings: SiteSettings;
+  topics: AdminTopic[]; autoPostSettings: AutoPostSettings; autoRuns: AdminAutoRun[];
 };
 
 const KEY = 'krish-admin-demo-v1';
@@ -80,6 +85,9 @@ function seed(): Db {
       heroImage: '',
       aboutPhoto: '',
     },
+    topics: [],
+    autoPostSettings: { publishAutomatically: false },
+    autoRuns: [],
   };
 }
 
@@ -244,6 +252,56 @@ function demo_deleteStat(id: string) {
   return delay(true);
 }
 
+/* ---------- Auto post topics ---------- */
+
+function demo_listTopics() {
+  return delay([...db().topics].sort((a, b) => a.position - b.position));
+}
+
+function demo_saveTopic(input: Omit<AdminTopic, 'id' | 'position' | 'status'> & { id?: string; status?: TopicStatus }) {
+  const list = db().topics;
+  const existing = input.id ? list.find((t) => t.id === input.id) : undefined;
+  if (existing) Object.assign(existing, input);
+  else list.push({ ...input, status: input.status ?? 'pending', id: uid(), position: list.length ? Math.max(...list.map((t) => t.position)) + 1 : 0 });
+  commit();
+  return delay(true);
+}
+
+function demo_moveTopic(id: string, direction: -1 | 1) {
+  const list = [...db().topics].sort((a, b) => a.position - b.position);
+  const i = list.findIndex((t) => t.id === id);
+  const j = i + direction;
+  if (i >= 0 && j >= 0 && j < list.length) {
+    const a = list[i].position;
+    list[i].position = list[j].position;
+    list[j].position = a;
+    commit();
+  }
+  return delay(true, 60);
+}
+
+function demo_deleteTopic(id: string) {
+  db().topics = db().topics.filter((t) => t.id !== id);
+  commit();
+  return delay(true);
+}
+
+/* ---------- Auto post settings & runs ---------- */
+
+function demo_getAutoPostSettings() {
+  return delay(db().autoPostSettings);
+}
+
+function demo_saveAutoPostSettings(settings: AutoPostSettings) {
+  db().autoPostSettings = settings;
+  commit();
+  return delay(true);
+}
+
+function demo_listAutoRuns() {
+  return delay([...db().autoRuns].sort((a, b) => b.ranAt.localeCompare(a.ranAt)));
+}
+
 /* ---------- Messages ---------- */
 
 function demo_listMessages() {
@@ -293,6 +351,9 @@ type PostRow = {
 type MessageRow = { id: string; name: string; email: string; message: string; created_at: string; read: boolean };
 type ToolRow = { id: string; name: string; logo_url: string; sort_order: number };
 type StatRow = { id: string; value: string; label: string; sort_order: number };
+type TopicRow = { id: string; title: string; notes: string; category: PostCategory; status: TopicStatus; position: number };
+type AutoPostSettingsRow = { publish_automatically: boolean };
+type AutoRunRow = { id: string; ran_at: string; topic: string; status: 'success' | 'failed'; message: string };
 
 const toPost = (r: PostRow): AdminPost => ({
   id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt, category: r.category,
@@ -303,6 +364,8 @@ const toMessage = (r: MessageRow): AdminMessage => ({
 });
 const toTool = (r: ToolRow): AdminTool => ({ id: r.id, name: r.name, logoUrl: r.logo_url ?? '', position: r.sort_order });
 const toStat = (r: StatRow): AdminStat => ({ id: r.id, value: r.value, label: r.label, position: r.sort_order });
+const toTopic = (r: TopicRow): AdminTopic => ({ id: r.id, title: r.title, notes: r.notes ?? '', category: r.category, status: r.status, position: r.position });
+const toRun = (r: AutoRunRow): AdminAutoRun => ({ id: r.id, ranAt: r.ran_at, topic: r.topic, status: r.status, message: r.message ?? '' });
 
 function check<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -314,6 +377,17 @@ function checkSkillsTable<T>(res: { data: T; error: { message: string; code?: st
   if (res.error) {
     if (res.error.code === '42P01' || /relation .* does not exist/i.test(res.error.message)) {
       throw new Error('Skills data isn’t set up in the database yet. Run supabase/add-tools-and-stats.sql in the Supabase SQL editor.');
+    }
+    throw new Error(res.error.message);
+  }
+  return res.data;
+}
+
+// Auto-post tables ship in add-auto-posts.sql, which older Supabase projects haven't run yet.
+function checkAutoPostsTable<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
+  if (res.error) {
+    if (res.error.code === '42P01' || /relation .* does not exist/i.test(res.error.message)) {
+      throw new Error('Auto posts isn’t set up in the database yet. Run supabase/add-auto-posts.sql in the Supabase SQL editor.');
     }
     throw new Error(res.error.message);
   }
@@ -455,6 +529,51 @@ const remote = {
     checkSkillsTable(await sb().from('stats').delete().eq('id', id));
     return true;
   },
+  async listTopics() {
+    const rows = checkAutoPostsTable(await sb().from('auto_post_topics').select('*').order('position'));
+    return (rows as TopicRow[]).map(toTopic);
+  },
+  async saveTopic(input: Omit<AdminTopic, 'id' | 'position' | 'status'> & { id?: string; status?: TopicStatus }) {
+    const { id, ...rest } = input;
+    if (id) {
+      checkAutoPostsTable(await sb().from('auto_post_topics').update(rest).eq('id', id));
+    } else {
+      const last = checkAutoPostsTable(await sb().from('auto_post_topics').select('position').order('position', { ascending: false }).limit(1));
+      const top = (last ?? []) as { position: number }[];
+      const position = top.length ? top[0].position + 1 : 0;
+      checkAutoPostsTable(await sb().from('auto_post_topics').insert({ ...rest, status: rest.status ?? 'pending', position }));
+    }
+    return true;
+  },
+  async moveTopic(id: string, direction: -1 | 1) {
+    const list = await remote.listTopics();
+    const i = list.findIndex((t) => t.id === id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= list.length) return true;
+    const [a, b] = await Promise.all([
+      sb().from('auto_post_topics').update({ position: list[j].position }).eq('id', list[i].id),
+      sb().from('auto_post_topics').update({ position: list[i].position }).eq('id', list[j].id),
+    ]);
+    checkAutoPostsTable(a);
+    checkAutoPostsTable(b);
+    return true;
+  },
+  async deleteTopic(id: string) {
+    checkAutoPostsTable(await sb().from('auto_post_topics').delete().eq('id', id));
+    return true;
+  },
+  async getAutoPostSettings(): Promise<AutoPostSettings> {
+    const row = checkAutoPostsTable(await sb().from('auto_post_settings').select('publish_automatically').eq('id', 1).maybeSingle());
+    return { publishAutomatically: (row as AutoPostSettingsRow | null)?.publish_automatically ?? false };
+  },
+  async saveAutoPostSettings(settings: AutoPostSettings) {
+    checkAutoPostsTable(await sb().from('auto_post_settings').upsert({ id: 1, publish_automatically: settings.publishAutomatically }));
+    return true;
+  },
+  async listAutoRuns() {
+    const rows = checkAutoPostsTable(await sb().from('auto_post_runs').select('*').order('ran_at', { ascending: false }).limit(30));
+    return (rows as AutoRunRow[]).map(toRun);
+  },
   async listMessages() {
     const rows = check(await sb().from('messages').select('*').order('created_at', { ascending: false }));
     return (rows as MessageRow[]).map(toMessage);
@@ -542,6 +661,16 @@ export const saveStat = (input: Omit<AdminStat, 'id' | 'position'> & { id?: stri
 export const moveStat = (id: string, direction: -1 | 1) =>
   supabase ? remote.moveStat(id, direction) : demo_moveStat(id, direction);
 export const deleteStat = (id: string) => (supabase ? remote.deleteStat(id) : demo_deleteStat(id));
+export const listTopics = () => (supabase ? remote.listTopics() : demo_listTopics());
+export const saveTopic = (input: Omit<AdminTopic, 'id' | 'position' | 'status'> & { id?: string; status?: TopicStatus }) =>
+  supabase ? remote.saveTopic(input) : demo_saveTopic(input);
+export const moveTopic = (id: string, direction: -1 | 1) =>
+  supabase ? remote.moveTopic(id, direction) : demo_moveTopic(id, direction);
+export const deleteTopic = (id: string) => (supabase ? remote.deleteTopic(id) : demo_deleteTopic(id));
+export const getAutoPostSettings = () => (supabase ? remote.getAutoPostSettings() : demo_getAutoPostSettings());
+export const saveAutoPostSettings = (settings: AutoPostSettings) =>
+  supabase ? remote.saveAutoPostSettings(settings) : demo_saveAutoPostSettings(settings);
+export const listAutoRuns = () => (supabase ? remote.listAutoRuns() : demo_listAutoRuns());
 export const listMessages = () => (supabase ? remote.listMessages() : demo_listMessages());
 export const setMessageRead = (id: string, read: boolean) =>
   supabase ? remote.setMessageRead(id, read) : demo_setMessageRead(id, read);

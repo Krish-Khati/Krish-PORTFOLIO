@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ExternalLink, FileText, FolderKanban, Images, LayoutDashboard, LogOut, Mail, Menu, Settings, Sparkles, X,
+  Bot, ExternalLink, FileText, FolderKanban, Images, LayoutDashboard, LogOut, Mail, Menu, Settings, Sparkles, X,
 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, useLocation } from 'wouter';
 import { AdminAuthProvider, useAdminAuth } from './auth';
@@ -13,6 +13,7 @@ import PostEditorPage from './pages/post-editor';
 import ProjectsPage from './pages/projects';
 import ImagesPage from './pages/images';
 import SkillsPage from './pages/skills';
+import AutoPostsPage from './pages/auto-posts';
 import MessagesPage from './pages/messages';
 import SettingsPage from './pages/settings';
 import './admin.css';
@@ -59,6 +60,7 @@ function AdminRoutes() {
         <Route path="/projects" component={ProjectsPage} />
         <Route path="/images" component={ImagesPage} />
         <Route path="/skills" component={SkillsPage} />
+        <Route path="/auto-posts" component={AutoPostsPage} />
         <Route path="/messages" component={MessagesPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route><Redirect to="/" replace /></Route>
@@ -73,6 +75,7 @@ const nav = [
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/images', label: 'Images', icon: Images },
   { href: '/skills', label: 'Skills', icon: Sparkles },
+  { href: '/auto-posts', label: 'Auto posts', icon: Bot },
   { href: '/messages', label: 'Messages', icon: Mail },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

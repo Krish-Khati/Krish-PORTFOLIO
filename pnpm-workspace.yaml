@@ -1,4 +1,4 @@
-﻿# ============================================================================
+# ============================================================================
 # SECURITY: Minimum release age for npm packages (supply-chain attack defense)
 # ============================================================================
 #
@@ -69,15 +69,19 @@ catalog:
 autoInstallPeers: false
 
 allowBuilds:
+  '@google/genai': true
   '@swc/core': true
   esbuild: true
   msw: true
+  protobufjs: true
   unrs-resolver: true
 
 onlyBuiltDependencies:
+  - '@google/genai'
   - '@swc/core'
   - esbuild
   - msw
+  - protobufjs
   - unrs-resolver
 
 overrides:
@@ -153,5 +157,5 @@ overrides:
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.28.2"
-# orval pins js-yaml to an exact version older than the CVE fix (>=4.3.2)
+  # orval pins js-yaml to an exact version older than the CVE fix (>=4.3.2)
   js-yaml: '4.3.2'
