@@ -237,7 +237,7 @@ function RecentRuns() {
                   ) : (
                     <span className="adm-status adm-status-draft" title={r.message}><XCircle size={13} /> failed</span>
                   )}
-                  {r.status === 'failed' && r.message && <small className="adm-muted adm-block">{r.message}</small>}
+                  {r.message && <small className="adm-muted adm-block">{r.message}</small>}
                 </td>
               </tr>
             ))}

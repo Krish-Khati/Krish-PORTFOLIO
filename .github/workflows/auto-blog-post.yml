@@ -34,3 +34,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Optional free backup writer, used only if Gemini fails after retries. The script
+          # works fine without this secret — it just has no backup until you add it.
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

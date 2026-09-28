@@ -2,9 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { ApiError, GoogleGenAI, Type } from '@google/genai';
 
 /*
- * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for
- * the Krish portfolio using Gemini and insert it into Supabase. Also runnable by hand via the
- * "Run workflow" button on the GitHub Actions tab, or locally with the three env vars set.
+ * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for the
+ * Krish portfolio and insert it into Supabase. Gemini is the main writer; if it's unavailable
+ * after retries, Groq is used as a free backup (same prompt, same JSON shape, same validation).
+ * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
+ * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY is optional).
  */
 
 const GEMINI_API_KEY = requireEnv('GEMINI_API_KEY');
@@ -32,19 +34,27 @@ type GeneratedPost = { title: string; excerpt: string; category: Category; block
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// Both aliased to Google's current default for their model family, so this script never needs
-// a model name bumped by hand. The fallback is a different family (Flash-Lite, not Flash), so
-// it has its own capacity pool — useful when the primary is overloaded (503) rather than broken.
-const PRIMARY_MODEL = 'gemini-flash-latest';
-const FALLBACK_MODEL = 'gemini-flash-lite-latest';
+// Aliased to Google's current default Flash model, so this never needs a model name bumped by hand.
+const GEMINI_MODEL = 'gemini-flash-latest';
+// GitHub Models (the original free backup) was retired in July 2026, so Groq is the backup instead.
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-// ~20s, 40s, 80s, 120s — matches Gemini's own guidance to back off hard on 503/429s.
-const RETRY_DELAYS_MS = [20_000, 40_000, 80_000, 120_000];
+// ~20s, 40s, 80s — how long to wait before each retry of a single provider.
+const RETRY_DELAYS_MS = [20_000, 40_000, 80_000];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
 function isRetryableError(err: unknown): boolean {
-  if (err instanceof ApiError) return err.status === 503 || err.status === 429;
+  if (err instanceof ApiError || err instanceof HttpError) return err.status === 503 || err.status === 429;
   const message = err instanceof Error ? err.message : String(err);
   return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|network|socket hang up/i.test(message);
 }
@@ -135,7 +145,14 @@ function buildPrompt(opts: {
     '- Clear section headings (h2 blocks), short paragraphs, and a practical, honest takeaway at the end.',
     '- No made-up statistics, no fake quotes from other people, no claims about things Krish did not do.',
     '- Simple, friendly, first-person English — like a real journal/blog entry, not marketing copy.',
-    '- Return ONLY the JSON described by the response schema.',
+    '',
+    'Return ONLY a single JSON object, no markdown fences, no extra text, in exactly this shape:',
+    '{ "title": string, "excerpt": string, "category": one of "Journey" | "Learning" | "Projects" | "AI" | "Marketing", ' +
+    '"blocks": Block[] }',
+    'Where each Block is one of:',
+    '{ "type": "h2" | "p" | "quote", "text": string }',
+    '{ "type": "list", "items": string[] }',
+    '{ "type": "code", "lang": string, "text": string }',
   );
 
   if (opts.feedback) parts.push('', `Your previous attempt was invalid: ${opts.feedback}. Fix this and try again.`);
@@ -187,64 +204,93 @@ function validate(data: unknown, existingTitles: string[]): { ok: true; post: Ge
   return { ok: true, post: { title: d.title.trim(), excerpt: d.excerpt.trim(), category: d.category as Category, blocks } };
 }
 
-// Calls one model, retrying on 503/429/network errors with increasing waits. Any other error
+// Retries one provider call on 503/429/network errors with increasing waits. Any other error
 // (bad API key, invalid request, etc.) is not retried and is thrown straight away.
-async function callModel(model: string, prompt: string): Promise<unknown> {
+async function withRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: { responseMimeType: 'application/json', responseSchema },
-      });
-      const text = response.text;
-      if (!text) throw new Error('Gemini returned an empty response.');
-      return JSON.parse(text) as unknown;
+      return await call();
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       if (!isRetryableError(err) || attempt >= RETRY_DELAYS_MS.length) {
-        console.error(`[${model}] attempt ${attempt + 1} failed, giving up: ${reason}`);
+        console.error(`[${label}] attempt ${attempt + 1} failed, giving up: ${reason}`);
         throw err;
       }
       const wait = RETRY_DELAYS_MS[attempt];
-      console.warn(`[${model}] attempt ${attempt + 1} failed (${reason}) — retrying in ${wait / 1000}s…`);
+      console.warn(`[${label}] attempt ${attempt + 1} failed (${reason}) — retrying in ${wait / 1000}s…`);
       await sleep(wait);
     }
   }
 }
 
-async function generateOnce(prompt: string): Promise<unknown> {
-  try {
-    return await callModel(PRIMARY_MODEL, prompt);
-  } catch (primaryErr) {
-    if (!isRetryableError(primaryErr)) throw primaryErr;
-    const primaryReason = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-    console.warn(`"${PRIMARY_MODEL}" failed after every retry (${primaryReason}) — falling back to "${FALLBACK_MODEL}"…`);
+async function callGemini(prompt: string): Promise<string> {
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema },
+  });
+  const text = response.text;
+  if (!text) throw new Error('Gemini returned an empty response.');
+  return text;
+}
+
+async function callGroq(prompt: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new HttpError(res.status, `Groq API error ${res.status}: ${body.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Groq returned an empty response.');
+  return text;
+}
+
+// One entry per writer. To add another free provider later (e.g. Groq's own alternates, or a
+// new service), just add a `call` function above and one more entry here — nothing else changes.
+const providers: { name: string; call: (prompt: string) => Promise<string> }[] = [
+  { name: 'Gemini', call: callGemini },
+  { name: 'Groq', call: callGroq },
+];
+
+async function generateOnce(prompt: string): Promise<{ data: unknown; writer: string }> {
+  const failures: string[] = [];
+  for (const provider of providers) {
     try {
-      return await callModel(FALLBACK_MODEL, prompt);
-    } catch (fallbackErr) {
-      const fallbackReason = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-      throw new Error(
-        `Gemini was unavailable on both "${PRIMARY_MODEL}" and "${FALLBACK_MODEL}" after retries. ` +
-        `Primary: ${primaryReason}. Fallback: ${fallbackReason}.`,
-      );
+      const text = await withRetry(provider.name, () => provider.call(prompt));
+      return { data: JSON.parse(text) as unknown, writer: provider.name };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      failures.push(`${provider.name}: ${reason}`);
+      console.warn(`${provider.name} could not write the post — trying the next provider…`);
     }
   }
+  throw new Error(`Every provider failed. ${failures.join(' | ')}`);
 }
 
 async function generateValidPost(opts: {
   topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[];
-}): Promise<GeneratedPost> {
+}): Promise<{ post: GeneratedPost; writer: string }> {
   const first = await generateOnce(buildPrompt(opts));
-  const firstCheck = validate(first, opts.existingTitles);
-  if (firstCheck.ok) return firstCheck.post;
+  const firstCheck = validate(first.data, opts.existingTitles);
+  if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer };
 
-  console.warn(`First attempt was invalid (${firstCheck.reason}), retrying once…`);
+  console.warn(`First attempt (${first.writer}) was invalid (${firstCheck.reason}), retrying once…`);
   const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }));
-  const secondCheck = validate(second, opts.existingTitles);
-  if (secondCheck.ok) return secondCheck.post;
+  const secondCheck = validate(second.data, opts.existingTitles);
+  if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer };
 
-  throw new Error(`Gemini's output was invalid twice in a row: ${secondCheck.reason}`);
+  throw new Error(`Output was invalid twice in a row (last from ${second.writer}): ${secondCheck.reason}`);
 }
 
 async function uniqueSlug(title: string) {
@@ -298,7 +344,7 @@ async function main() {
   const attemptLabel = topic?.title ?? '(auto-picked topic)';
 
   try {
-    const generated = await generateValidPost({
+    const { post: generated, writer } = await generateValidPost({
       topicTitle: topic?.title,
       topicNotes: topic?.notes,
       topicCategory: topic?.category,
@@ -323,8 +369,8 @@ async function main() {
       if (markUsedError) console.error(`Post was saved, but could not mark the topic as used: ${markUsedError.message}`);
     }
 
-    await logRun('success', generated.title);
-    console.log(`Created ${publishAutomatically ? 'and published' : 'draft'} post: "${generated.title}" (/blog/${slug})`);
+    await logRun('success', generated.title, `Written by ${writer}.`);
+    console.log(`Created ${publishAutomatically ? 'and published' : 'draft'} post: "${generated.title}" (/blog/${slug}) — written by ${writer}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await logRun('failed', attemptLabel, message);
