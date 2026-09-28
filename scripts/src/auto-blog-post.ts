@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { ApiError, GoogleGenAI, Type } from '@google/genai';
+import { pickModelOrder, type ModelChoice } from './ai-model-picker';
 
 /*
  * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for the
- * Krish portfolio and insert it into Supabase. Writers are tried in order until one works:
- * Gemini Flash, then Gemini Flash-Lite (separate capacity pool, so it can succeed when Flash is
- * overloaded), then Groq as a free backup (same prompt, same JSON shape, same validation).
+ * Krish portfolio and insert it into Supabase. No model names are hardcoded here: ai-model-picker
+ * asks Gemini and Groq what models actually exist right now and ranks them, so this file never
+ * needs a model name bumped by hand. Models are tried in that ranked order (all Gemini first,
+ * then Groq as a free backup) until one produces a valid post; whichever one works is remembered
+ * in Supabase and tried first next time.
  * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
  * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY is optional).
  */
@@ -35,35 +38,28 @@ type GeneratedPost = { title: string; excerpt: string; category: Category; block
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// Aliased to Google's current default Flash / Flash-Lite models, so these never need a model
-// name bumped by hand. They're separate capacity pools, so Flash being overloaded doesn't mean
-// Flash-Lite is too.
-const GEMINI_MODEL = 'gemini-flash-latest';
-const GEMINI_MODEL_LITE = 'gemini-flash-lite-latest';
+// GitHub Models (an earlier free backup) was retired in July 2026, so Groq is the backup instead.
+// Optional override: set these GitHub repo variables to try specific model ids first (comma
+// separated) before falling back to the automatically ranked list. Leave unset for fully
+// automatic model selection.
+const GEMINI_MODELS_OVERRIDE = parseCsvEnv('GEMINI_MODELS');
+const GROQ_MODELS_OVERRIDE = parseCsvEnv('GROQ_MODELS');
 
-// GitHub Models (the original free backup) was retired in July 2026, so Groq is the backup instead.
-// Groq's free-tier catalog changes often (models get deprecated with a few weeks' notice), so the
-// model isn't hardcoded — callGroq() asks Groq which models actually exist right before writing.
-// Ordered largest/best-for-writing first; whichever of these is actually live gets used.
-const GROQ_PREFERRED_MODELS = [
-  'openai/gpt-oss-120b',
-  'moonshotai/kimi-k2-instruct',
-  'qwen/qwen3-32b',
-  'meta-llama/llama-4-maverick-17b-128e-instruct',
-  'llama-3.3-70b-versatile',
-  'openai/gpt-oss-20b',
-  'meta-llama/llama-4-scout-17b-16e-instruct',
-  'llama-3.1-8b-instant',
-  'gemma2-9b-it',
-];
-// Groq's catalog also lists audio transcription/TTS and moderation models under /models — those
-// can't write a blog post, so never pick one even as a last resort.
-const GROQ_EXCLUDE_RE = /whisper|tts|guard|moderation|audio/i;
+function parseCsvEnv(name: string): string[] | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : undefined;
+}
 
-// ~15s, 30s — how long to wait before retrying one writer option. Kept short because the run has
-// up to three writer options and, on an invalid response, tries the whole chain a second time —
-// all within the GitHub Actions job's 15-minute timeout.
+// ~15s, 30s — how long to wait before retrying one model on a retryable error. Kept short because
+// a run may try several models, and on an invalid response, tries the whole chain a second time —
+// all within the overall time budget below and the GitHub Actions job's 15-minute timeout.
 const RETRY_DELAYS_MS = [15_000, 30_000];
+
+// Stop trying more models after this long, so a run with many candidates still finishes well
+// inside the GitHub Actions job's 15-minute timeout.
+const TOTAL_MODEL_BUDGET_MS = 10 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -261,87 +257,120 @@ function callGemini(model: string) {
   };
 }
 
-// Picks the best available Groq chat model: the first of GROQ_PREFERRED_MODELS that's actually
-// live, or (if none of those are) any other non-excluded model Groq currently offers.
-function selectGroqModel(available: string[]): string {
-  const usable = available.filter((id) => !GROQ_EXCLUDE_RE.test(id));
-  const preferred = GROQ_PREFERRED_MODELS.find((id) => usable.includes(id));
-  if (preferred) return preferred;
-  if (usable.length) return usable[0];
-  throw new Error('Groq has no usable chat models available.');
+// Extracts the JSON object from a model's text output. Fast path: the whole trimmed text is
+// already valid JSON (the normal case). Fallback: some reasoning models (e.g. Groq's gpt-oss)
+// emit reasoning/commentary before or around the final answer, so this scans for a balanced
+// {...} span and parses just that — the "final answer only" part of the JSON.
+function extractJsonObject(text: string): string {
+  const trimmed = text.trim();
+  try {
+    JSON.parse(trimmed);
+    return trimmed;
+  } catch {
+    // fall through to brace extraction below
+  }
+  const start = trimmed.indexOf('{');
+  if (start === -1) return trimmed;
+  let depth = 0;
+  for (let i = start; i < trimmed.length; i++) {
+    if (trimmed[i] === '{') depth++;
+    else if (trimmed[i] === '}') {
+      depth--;
+      if (depth === 0) return trimmed.slice(start, i + 1);
+    }
+  }
+  return trimmed;
 }
 
-async function callGroq(prompt: string): Promise<ProviderResult> {
+async function callGroqModel(model: string, prompt: string): Promise<ProviderResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
 
-  const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!modelsRes.ok) {
-    const body = await modelsRes.text().catch(() => '');
-    throw new HttpError(modelsRes.status, `Groq models list error ${modelsRes.status}: ${body.slice(0, 300)}`);
-  }
-  const modelsData = (await modelsRes.json()) as { data?: { id: string }[] };
-  const model = selectGroqModel((modelsData.data ?? []).map((m) => m.id));
-  console.log(`[Groq] chosen model: ${model}`);
+  const request = async (withJsonMode: boolean) => {
+    const body: Record<string, unknown> = { model, messages: [{ role: 'user', content: prompt }] };
+    if (withJsonMode) body.response_format = { type: 'json_object' };
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      // A model that disappeared from the catalog or doesn't support this request shouldn't be
+      // retried — withRetry would just hit the same error again — so this still throws normally
+      // and generateOnce() moves straight on to the next model.
+      throw new HttpError(res.status, `Groq API error ${res.status} (model "${model}"): ${errBody.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error('Groq returned an empty response.');
+    return text;
+  };
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    // A model that disappeared from the catalog between the list call and here shouldn't be
-    // retried — withRetry would just hit the same 404 again — so this still throws normally and
-    // generateOnce() moves straight on to the next writer option.
-    throw new HttpError(res.status, `Groq API error ${res.status} (model "${model}"): ${body.slice(0, 300)}`);
+  let text: string;
+  try {
+    text = await request(true);
+  } catch (err) {
+    // Some models (reasoning models in particular) reject response_format entirely — fall back
+    // to a plain request and pull the JSON out of the final answer text instead.
+    const rejectsJsonMode = err instanceof HttpError && err.status === 400 &&
+      /response_format|json_object|json_schema|unsupported/i.test(err.message);
+    if (!rejectsJsonMode) throw err;
+    text = await request(false);
   }
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Groq returned an empty response.');
-  return { text, model };
+
+  return { text: extractJsonObject(text), model };
 }
 
-// One entry per writer option, tried in order. To add another free provider later, just add a
-// `call` function above and one more entry here — nothing else changes.
-const providers: { name: string; label: string; call: (prompt: string) => Promise<ProviderResult> }[] = [
-  { name: 'Gemini', label: `Gemini (${GEMINI_MODEL})`, call: callGemini(GEMINI_MODEL) },
-  { name: 'Gemini', label: `Gemini (${GEMINI_MODEL_LITE})`, call: callGemini(GEMINI_MODEL_LITE) },
-  { name: 'Groq', label: 'Groq', call: callGroq },
-];
+function callProvider(choice: ModelChoice, prompt: string): Promise<ProviderResult> {
+  return choice.provider === 'gemini' ? callGemini(choice.model)(prompt) : callGroqModel(choice.model, prompt);
+}
 
-async function generateOnce(prompt: string): Promise<{ data: unknown; writer: string }> {
+function providerLabel(choice: ModelChoice) {
+  return `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${choice.model})`;
+}
+
+// Tries each model in `order`, most-preferred first, until one returns parseable JSON or the
+// overall time budget (`deadline`) runs out.
+async function generateOnce(
+  prompt: string,
+  order: ModelChoice[],
+  deadline: number,
+): Promise<{ data: unknown; writer: string; usedChoice: ModelChoice }> {
   const failures: string[] = [];
-  for (const provider of providers) {
+  for (const choice of order) {
+    if (Date.now() >= deadline) {
+      failures.push('stopped — time budget exceeded before trying the remaining models');
+      break;
+    }
+    const label = providerLabel(choice);
     try {
-      const { text, model } = await withRetry(provider.label, () => provider.call(prompt));
-      return { data: JSON.parse(text) as unknown, writer: `${provider.name} (${model})` };
+      const { text, model } = await withRetry(label, () => callProvider(choice, prompt));
+      return { data: JSON.parse(text) as unknown, writer: `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${model})`, usedChoice: choice };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      failures.push(`${provider.label}: ${reason}`);
-      console.warn(`${provider.label} could not write the post — trying the next option…`);
+      failures.push(`${label}: ${reason}`);
+      console.warn(`${label} could not write the post — trying the next option…`);
     }
   }
-  throw new Error(`Every provider failed. ${failures.join(' | ')}`);
+  const shown = failures.slice(0, 8);
+  const more = failures.length > shown.length ? ` … and ${failures.length - shown.length} more` : '';
+  throw new Error(`Every model failed. ${shown.join(' | ')}${more}`);
 }
 
 async function generateValidPost(opts: {
-  topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[];
-}): Promise<{ post: GeneratedPost; writer: string }> {
-  const first = await generateOnce(buildPrompt(opts));
+  topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[]; order: ModelChoice[];
+}): Promise<{ post: GeneratedPost; writer: string; usedChoice: ModelChoice }> {
+  const deadline = Date.now() + TOTAL_MODEL_BUDGET_MS;
+
+  const first = await generateOnce(buildPrompt(opts), opts.order, deadline);
   const firstCheck = validate(first.data, opts.existingTitles);
-  if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer };
+  if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer, usedChoice: first.usedChoice };
 
   console.warn(`First attempt (${first.writer}) was invalid (${firstCheck.reason}), retrying once…`);
-  const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }));
+  const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline);
   const secondCheck = validate(second.data, opts.existingTitles);
-  if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer };
+  if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer, usedChoice: second.usedChoice };
 
   throw new Error(`Output was invalid twice in a row (last from ${second.writer}): ${secondCheck.reason}`);
 }
@@ -360,6 +389,18 @@ async function uniqueSlug(title: string) {
 async function logRun(status: 'success' | 'failed', topic: string, message = '') {
   const { error } = await supabase.from('auto_post_runs').insert({ status, topic, message });
   if (error) console.error(`Could not write run log: ${error.message}`);
+}
+
+// auto_post_settings.last_working_model is stored as "<provider>:<model>", e.g.
+// "gemini:gemini-flash-latest" — parsed back into a ModelChoice for pickModelOrder to prefer.
+function parseLastWorkingModel(raw: string | null | undefined): ModelChoice | undefined {
+  if (!raw) return undefined;
+  const sep = raw.indexOf(':');
+  if (sep === -1) return undefined;
+  const provider = raw.slice(0, sep);
+  const model = raw.slice(sep + 1);
+  if ((provider !== 'gemini' && provider !== 'groq') || !model) return undefined;
+  return { provider, model };
 }
 
 async function main() {
@@ -381,7 +422,7 @@ async function main() {
   }
 
   const { data: settingsRow, error: settingsError } = await supabase
-    .from('auto_post_settings').select('publish_automatically').eq('id', 1).maybeSingle();
+    .from('auto_post_settings').select('publish_automatically, last_working_model').eq('id', 1).maybeSingle();
   if (settingsError) throw new Error(`Could not read auto-post settings: ${settingsError.message}`);
   const publishAutomatically = settingsRow?.publish_automatically ?? false;
 
@@ -394,14 +435,23 @@ async function main() {
   if (postsError) throw new Error(`Could not read existing posts: ${postsError.message}`);
   const existingTitles = (existingPosts ?? []).map((p) => p.title as string);
 
+  const order = await pickModelOrder({
+    geminiApiKey: GEMINI_API_KEY,
+    groqApiKey: process.env.GROQ_API_KEY,
+    geminiOverride: GEMINI_MODELS_OVERRIDE,
+    groqOverride: GROQ_MODELS_OVERRIDE,
+    preferredFirst: parseLastWorkingModel(settingsRow?.last_working_model as string | null | undefined),
+  });
+
   const attemptLabel = topic?.title ?? '(auto-picked topic)';
 
   try {
-    const { post: generated, writer } = await generateValidPost({
+    const { post: generated, writer, usedChoice } = await generateValidPost({
       topicTitle: topic?.title,
       topicNotes: topic?.notes,
       topicCategory: topic?.category,
       existingTitles,
+      order,
     });
 
     const slug = await uniqueSlug(generated.title);
@@ -421,6 +471,10 @@ async function main() {
       const { error: markUsedError } = await supabase.from('auto_post_topics').update({ status: 'used' }).eq('id', topic.id);
       if (markUsedError) console.error(`Post was saved, but could not mark the topic as used: ${markUsedError.message}`);
     }
+
+    const { error: rememberError } = await supabase
+      .from('auto_post_settings').update({ last_working_model: `${usedChoice.provider}:${usedChoice.model}` }).eq('id', 1);
+    if (rememberError) console.error(`Post was saved, but could not remember the working model: ${rememberError.message}`);
 
     await logRun('success', generated.title, `Written by ${writer}.`);
     console.log(`Created ${publishAutomatically ? 'and published' : 'draft'} post: "${generated.title}" (/blog/${slug}) — written by ${writer}`);

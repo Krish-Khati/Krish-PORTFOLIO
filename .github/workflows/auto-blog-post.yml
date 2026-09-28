@@ -37,3 +37,9 @@ jobs:
           # Optional free backup writer, used only if Gemini fails after retries. The script
           # works fine without this secret — it just has no backup until you add it.
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Optional: set these repo variables (Settings -> Secrets and variables -> Actions ->
+          # Variables) to a comma-separated list of model ids to try first, e.g.
+          # "gemini-flash-latest,gemini-2.5-flash". Leave unset for fully automatic model
+          # selection (ai-model-picker.ts asks each provider what's live and ranks it).
+          GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
+          GROQ_MODELS: ${{ vars.GROQ_MODELS }}
