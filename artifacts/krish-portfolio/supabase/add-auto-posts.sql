@@ -42,3 +42,13 @@ create policy "admin manages auto post settings" on auto_post_settings for all t
 
 drop policy if exists "admin manages auto post runs" on auto_post_runs;
 create policy "admin manages auto post runs" on auto_post_runs for all to authenticated using (true) with check (true);
+
+-- Model-picker memory for the auto blog post script (scripts/src/auto-blog-post.ts). All three
+-- are stored as "<provider>:<model>" (blocked_models is a comma-separated list of those).
+-- last_working_model: tried first on the next run.
+-- last_overloaded_model: the model that returned 503 most recently; deprioritized next run, and
+--   cleared back to null on any run where nothing was overloaded.
+-- blocked_models: models that returned 404 "no longer available" — excluded permanently.
+alter table auto_post_settings add column if not exists last_working_model text;
+alter table auto_post_settings add column if not exists last_overloaded_model text;
+alter table auto_post_settings add column if not exists blocked_models text;

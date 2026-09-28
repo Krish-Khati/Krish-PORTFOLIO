@@ -6,9 +6,11 @@ import { pickModelOrder, type ModelChoice } from './ai-model-picker';
  * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for the
  * Krish portfolio and insert it into Supabase. No model names are hardcoded here: ai-model-picker
  * asks Gemini and Groq what models actually exist right now and ranks them, so this file never
- * needs a model name bumped by hand. Models are tried in that ranked order (all Gemini first,
- * then Groq as a free backup) until one produces a valid post; whichever one works is remembered
- * in Supabase and tried first next time.
+ * needs a model name bumped by hand. The first pass alternates the top 3 models of each provider
+ * (Gemini #1, Groq #1, Gemini #2, ...) so one overloaded provider can't burn the whole run before
+ * the other is tried; a provider is skipped entirely once 2 of its models return 503 in a row.
+ * Whichever model works is remembered in Supabase and tried first next time; a model that's
+ * actually gone (404) is remembered too, and excluded from then on.
  * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
  * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY is optional).
  */
@@ -52,14 +54,14 @@ function parseCsvEnv(name: string): string[] | undefined {
   return list.length ? list : undefined;
 }
 
-// ~15s, 30s — how long to wait before retrying one model on a retryable error. Kept short because
+// One retry, 10s wait, on a retryable error (503/429) — never for 404/403/400. Kept short because
 // a run may try several models, and on an invalid response, tries the whole chain a second time —
 // all within the overall time budget below and the GitHub Actions job's 15-minute timeout.
-const RETRY_DELAYS_MS = [15_000, 30_000];
+const RETRY_DELAYS_MS = [10_000];
 
 // Stop trying more models after this long, so a run with many candidates still finishes well
 // inside the GitHub Actions job's 15-minute timeout.
-const TOTAL_MODEL_BUDGET_MS = 10 * 60 * 1000;
+const TOTAL_MODEL_BUDGET_MS = 8 * 60 * 1000;
 
 // A single request to a model (Gemini or Groq) is aborted if it hasn't responded by this point,
 // so a stalled connection can never hang the whole run — it just becomes a normal failure and
@@ -107,6 +109,15 @@ function isRetryableError(err: unknown): boolean {
 // moves straight to the next model), so this deliberately doesn't feed into isRetryableError.
 function isOverloadedError(err: unknown): boolean {
   return (err instanceof ApiError || err instanceof HttpError) && err.status === 503;
+}
+
+// A model that's actually gone from the catalog (retired, decommissioned) rather than just
+// temporarily busy — worth remembering permanently (auto_post_settings.blocked_models) instead of
+// re-discovering it every run.
+function isPermanentlyUnavailable(err: unknown): boolean {
+  if ((err instanceof ApiError || err instanceof HttpError) && err.status === 404) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /no longer available|model_not_found|model_decommissioned|has been deprecated|has been removed/i.test(message);
 }
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -434,14 +445,25 @@ function providerLabel(choice: ModelChoice) {
   return `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${choice.model})`;
 }
 
+// Per-provider circuit breaker state, shared across both generateOnce() passes within one
+// generateValidPost() call: once a provider returns 503 from 2 different models in a row, the
+// rest of that provider's models are skipped for the remainder of the run instead of wasting the
+// time budget retrying a provider that's clearly overloaded right now.
+type BreakerState = { consecutiveOverloads: Record<ModelChoice['provider'], number>; broken: Set<ModelChoice['provider']> };
+const newBreakerState = (): BreakerState => ({ consecutiveOverloads: { gemini: 0, groq: 0 }, broken: new Set() });
+
 // Tries each model in `order`, most-preferred first, until one returns parseable JSON or the
 // overall time budget (`deadline`) runs out. `onOverloaded` is called for every model that fails
 // with a 503 (after retries), so the caller can remember to avoid starting with it next run.
+// `onPermanentlyUnavailable` is called for every model that's actually gone (404), so the caller
+// can remember to exclude it from now on.
 async function generateOnce(
   prompt: string,
   order: ModelChoice[],
   deadline: number,
+  breaker: BreakerState,
   onOverloaded: (choice: ModelChoice) => void,
+  onPermanentlyUnavailable: (choice: ModelChoice) => void,
 ): Promise<{ data: unknown; writer: string; usedChoice: ModelChoice }> {
   const failures: string[] = [];
   for (const choice of order) {
@@ -449,13 +471,28 @@ async function generateOnce(
       failures.push('stopped — time budget exceeded before trying the remaining models');
       break;
     }
+    const providerName = choice.provider === 'gemini' ? 'Gemini' : 'Groq';
     const label = providerLabel(choice);
+    if (breaker.broken.has(choice.provider)) {
+      console.log(`Skipping ${label} — ${providerName}'s circuit breaker is open this run.`);
+      continue;
+    }
     console.log(`Trying ${label}…`);
     try {
       const { text, model } = await withRetry(label, () => callProvider(choice, prompt));
-      return { data: JSON.parse(text) as unknown, writer: `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${model})`, usedChoice: choice };
+      return { data: JSON.parse(text) as unknown, writer: `${providerName} (${model})`, usedChoice: choice };
     } catch (err) {
-      if (isOverloadedError(err)) onOverloaded(choice);
+      if (isOverloadedError(err)) {
+        onOverloaded(choice);
+        const count = (breaker.consecutiveOverloads[choice.provider] += 1);
+        if (count >= 2) {
+          breaker.broken.add(choice.provider);
+          console.warn(`${providerName}: 2 models in a row returned 503 — skipping the rest of ${providerName} this run.`);
+        }
+      } else {
+        breaker.consecutiveOverloads[choice.provider] = 0;
+        if (isPermanentlyUnavailable(err)) onPermanentlyUnavailable(choice);
+      }
       const reason = err instanceof Error ? err.message : String(err);
       failures.push(`${label}: ${reason}`);
       console.warn(`${label} could not write the post — trying the next option…`);
@@ -469,15 +506,19 @@ async function generateOnce(
 async function generateValidPost(opts: {
   topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[]; order: ModelChoice[];
   onOverloaded: (choice: ModelChoice) => void;
+  onPermanentlyUnavailable: (choice: ModelChoice) => void;
 }): Promise<{ post: GeneratedPost; writer: string; usedChoice: ModelChoice }> {
   const deadline = Date.now() + TOTAL_MODEL_BUDGET_MS;
+  const breaker = newBreakerState();
 
-  const first = await generateOnce(buildPrompt(opts), opts.order, deadline, opts.onOverloaded);
+  const first = await generateOnce(buildPrompt(opts), opts.order, deadline, breaker, opts.onOverloaded, opts.onPermanentlyUnavailable);
   const firstCheck = validate(first.data, opts.existingTitles);
   if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer, usedChoice: first.usedChoice };
 
   console.warn(`First attempt (${first.writer}) was invalid (${firstCheck.reason}), retrying once…`);
-  const second = await generateOnce(buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline, opts.onOverloaded);
+  const second = await generateOnce(
+    buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline, breaker, opts.onOverloaded, opts.onPermanentlyUnavailable,
+  );
   const secondCheck = validate(second.data, opts.existingTitles);
   if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer, usedChoice: second.usedChoice };
 
@@ -500,9 +541,9 @@ async function logRun(status: 'success' | 'failed', topic: string, message = '')
   if (error) console.error(`Could not write run log: ${error.message}`);
 }
 
-// auto_post_settings.last_working_model is stored as "<provider>:<model>", e.g.
-// "gemini:gemini-flash-latest" — parsed back into a ModelChoice for pickModelOrder to prefer.
-function parseLastWorkingModel(raw: string | null | undefined): ModelChoice | undefined {
+// The auto_post_settings model-memory columns are stored as "<provider>:<model>", e.g.
+// "gemini:gemini-flash-latest" — parsed back into a ModelChoice for pickModelOrder.
+function parseModelChoice(raw: string | null | undefined): ModelChoice | undefined {
   if (!raw) return undefined;
   const sep = raw.indexOf(':');
   if (sep === -1) return undefined;
@@ -510,6 +551,12 @@ function parseLastWorkingModel(raw: string | null | undefined): ModelChoice | un
   const model = raw.slice(sep + 1);
   if ((provider !== 'gemini' && provider !== 'groq') || !model) return undefined;
   return { provider, model };
+}
+
+// blocked_models is a comma-separated list of the same "<provider>:<model>" format.
+function parseModelChoiceList(raw: string | null | undefined): ModelChoice[] {
+  if (!raw) return [];
+  return raw.split(',').map((s) => parseModelChoice(s.trim())).filter((c): c is ModelChoice => !!c);
 }
 
 async function main() {
@@ -532,10 +579,11 @@ async function main() {
 
   const { data: settingsRow, error: settingsError } = await supabase
     .from('auto_post_settings')
-    .select('publish_automatically, last_working_model, last_overloaded_model')
+    .select('publish_automatically, last_working_model, last_overloaded_model, blocked_models')
     .eq('id', 1).maybeSingle();
   if (settingsError) throw new Error(`Could not read auto-post settings: ${settingsError.message}`);
   const publishAutomatically = settingsRow?.publish_automatically ?? false;
+  const blockedModels = parseModelChoiceList(settingsRow?.blocked_models as string | null | undefined);
 
   const { data: topics, error: topicsError } = await supabase
     .from('auto_post_topics').select('id, title, notes, category').eq('status', 'pending').order('position').limit(1);
@@ -551,8 +599,10 @@ async function main() {
     groqApiKey: process.env.GROQ_API_KEY,
     geminiOverride: GEMINI_MODELS_OVERRIDE,
     groqOverride: GROQ_MODELS_OVERRIDE,
-    preferredFirst: parseLastWorkingModel(settingsRow?.last_working_model as string | null | undefined),
-    deprioritize: parseLastWorkingModel(settingsRow?.last_overloaded_model as string | null | undefined),
+    exclude: blockedModels,
+    preferredFirst: parseModelChoice(settingsRow?.last_working_model as string | null | undefined),
+    deprioritize: parseModelChoice(settingsRow?.last_overloaded_model as string | null | undefined),
+    interleaveTop: 3,
   });
 
   const attemptLabel = topic?.title ?? '(auto-picked topic)';
@@ -560,6 +610,9 @@ async function main() {
   // Tracks the first model (if any) that returns 503 this run, so it can be deprioritized next
   // run instead of being tried first again while it's still overloaded.
   let overloadedChoice: ModelChoice | undefined;
+  // Tracks every model that returned 404/"no longer available" this run, so it can be excluded
+  // permanently instead of being rediscovered (and failing again) on future runs.
+  const newlyBlocked = new Set<string>();
 
   try {
     const { post: generated, writer, usedChoice } = await generateValidPost({
@@ -569,6 +622,7 @@ async function main() {
       existingTitles,
       order,
       onOverloaded: (choice) => { overloadedChoice ??= choice; },
+      onPermanentlyUnavailable: (choice) => { newlyBlocked.add(`${choice.provider}:${choice.model}`); },
     });
 
     const slug = await uniqueSlug(generated.title);
@@ -607,6 +661,16 @@ async function main() {
       .update({ last_overloaded_model: overloadedChoice ? `${overloadedChoice.provider}:${overloadedChoice.model}` : null })
       .eq('id', 1);
     if (overloadedError) console.error(`Could not update overloaded-model memory: ${overloadedError.message}`);
+
+    // Unlike last_overloaded_model, this accumulates forever (a genuinely retired model doesn't
+    // come back), so it's a union with whatever was already blocked, not a replacement.
+    if (newlyBlocked.size) {
+      const merged = new Set([...blockedModels.map((c) => `${c.provider}:${c.model}`), ...newlyBlocked]);
+      const { error: blockedError } = await supabase
+        .from('auto_post_settings').update({ blocked_models: [...merged].join(',') }).eq('id', 1);
+      if (blockedError) console.error(`Could not update blocked-models memory: ${blockedError.message}`);
+      console.warn(`Blocking for future runs (404/no longer available): ${[...newlyBlocked].join(', ')}`);
+    }
   }
 }
 

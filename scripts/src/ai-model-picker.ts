@@ -16,16 +16,22 @@ export type Provider = 'gemini' | 'groq';
 export type ModelChoice = { provider: Provider; model: string };
 
 // Keywords that mark a model as non-text (TTS, image/video generation, embeddings, moderation,
-// coding-agent/computer-use variants, etc.) so they're never picked to write a blog post, even as
-// a last resort.
+// coding-agent/computer-use variants, etc.) or otherwise unsuitable for writing a blog post
+// (Gemma — an open-weight model family, not what this is tuned for), so they're never picked,
+// even as a last resort.
 const EXCLUDE_NAME_RE = new RegExp(
   [
-    'tts', 'image', 'live', 'audio', 'embedding', 'transcribe', 'whisper', 'guard', 'safeguard',
-    'orpheus', 'robotics', 'computer-use', 'deep-research', 'agent', 'antigravity', 'omni', 'veo',
-    'lyria', 'imagen', 'aqa',
+    'tts', 'image', 'nano-banana', 'live', 'audio', 'embedding', 'transcribe', 'whisper', 'guard',
+    'safeguard', 'orpheus', 'robotics', 'computer-use', 'customtools', 'deep-research', 'agent',
+    'antigravity', 'omni', 'veo', 'lyria', 'imagen', 'aqa', 'gemma',
   ].join('|'),
   'i',
 );
+
+// A "pro"-tier model (e.g. "gemini-2.5-pro", "gemini-3-pro-preview") is usually quota-0 on a free
+// tier — matched with boundaries so it doesn't false-positive on an unrelated word containing
+// "pro" as a substring.
+const PRO_TIER_RE = /(^|[-_/])pro([-_]|$)/i;
 
 // Used only if a provider's live models-list call itself fails (network error, outage, etc.) —
 // never preferred over a live list, and callers still get a warning when this is used. Because
@@ -91,7 +97,7 @@ export async function listGroqModels(apiKey: string): Promise<string[]> {
 }
 
 function excludeNonText(names: string[]): string[] {
-  return names.filter((n) => !EXCLUDE_NAME_RE.test(n));
+  return names.filter((n) => !EXCLUDE_NAME_RE.test(n) && !PRO_TIER_RE.test(n));
 }
 
 // Finds the first bare version-like token (e.g. "2.5", "1", "3.8") in a hyphen/slash-separated
@@ -105,16 +111,16 @@ function firstVersionNumber(name: string): number | undefined {
 
 /**
  * Ranks Gemini model ids best-first: stable before preview/experimental; "flash" before
- * "flash-lite" before "pro" (pro often isn't on the free tier); higher version number first;
- * versionless "-latest" aliases sort after the specific versions they alias.
+ * "flash-lite" before everything else (pro-tier models are excluded entirely — see
+ * excludeNonText); higher version number first; versionless "-latest" aliases sort after the
+ * specific versions they alias.
  */
 export function rankGeminiModels(names: string[]): string[] {
   const usable = excludeNonText(names);
   const tierOf = (n: string) => {
     if (/flash-lite/i.test(n)) return 1;
     if (/flash/i.test(n)) return 0;
-    if (/pro/i.test(n)) return 2;
-    return 3;
+    return 2;
   };
   const isPreviewOrExp = (n: string) => /preview|exp(?:erimental)?/i.test(n);
 
@@ -163,17 +169,29 @@ export type PickModelOrderOptions = {
   geminiOverride?: string[];
   /** Skips the live list + ranking for Groq and tries exactly these ids, in this order. */
   groqOverride?: string[];
-  /** A model to move to the front of the final order, if it's still present in it. */
+  /** Models to drop from consideration entirely (e.g. ones a caller has learned are gone/404). */
+  exclude?: ModelChoice[];
+  /** A model to move to the very front of the final order, if it's still present in it. */
   preferredFirst?: ModelChoice;
   /**
-   * A model to move to the back of the final order (e.g. one that returned 503/overloaded last
-   * run), so a run doesn't immediately retry the same busy model first. Ignored if it's also
-   * `preferredFirst`.
+   * A model to move to the back of its own provider's ranked list (e.g. one that returned
+   * 503/overloaded last run), so a run doesn't immediately retry the same busy model first.
+   * Ignored if it's also `preferredFirst`.
    */
   deprioritize?: ModelChoice;
+  /**
+   * If set, the first pass alternates the top N models of each provider — Gemini #1, Groq #1,
+   * Gemini #2, Groq #2, ... — so one overloaded provider can't burn the whole run before the
+   * other provider is even tried. Any models beyond the top N are appended afterward, still
+   * ranked, one provider's remainder after the other. Omit for the plain "all of Gemini, then all
+   * of Groq" order.
+   */
+  interleaveTop?: number;
   /** Defaults to console.log; pass your own to redirect/collect the picker's log lines. */
   log?: (line: string) => void;
 };
+
+const isSameChoice = (a: ModelChoice, b: ModelChoice) => a.provider === b.provider && a.model === b.model;
 
 // A transient blip on the models-list call itself shouldn't be enough to fall back to the tiny
 // emergency list (which would then only offer -latest aliases) — one quick retry first.
@@ -226,21 +244,44 @@ export async function pickModelOrder(opts: PickModelOrderOptions): Promise<Model
     }
   }
 
-  let order: ModelChoice[] = [
-    ...geminiRanked.map((model) => ({ provider: 'gemini' as const, model })),
-    ...groqRanked.map((model) => ({ provider: 'groq' as const, model })),
-  ];
+  if (opts.exclude?.length) {
+    const excludedGemini = new Set(opts.exclude.filter((c) => c.provider === 'gemini').map((c) => c.model));
+    const excludedGroq = new Set(opts.exclude.filter((c) => c.provider === 'groq').map((c) => c.model));
+    if (excludedGemini.size) geminiRanked = geminiRanked.filter((m) => !excludedGemini.has(m));
+    if (excludedGroq.size) groqRanked = groqRanked.filter((m) => !excludedGroq.has(m));
+    if (excludedGemini.size || excludedGroq.size) {
+      log(`[ai-model-picker] Excluding previously-blocked models: ${[...excludedGemini].map((m) => `gemini:${m}`).concat([...excludedGroq].map((m) => `groq:${m}`)).join(', ')}`);
+    }
+  }
 
-  const isSameChoice = (a: ModelChoice, b: ModelChoice) => a.provider === b.provider && a.model === b.model;
-
+  // Deprioritizing operates on each provider's own ranked list (not the final combined order),
+  // so it still works correctly whether or not interleaveTop is used afterward.
   if (opts.deprioritize && !(opts.preferredFirst && isSameChoice(opts.deprioritize, opts.preferredFirst))) {
     const { provider, model } = opts.deprioritize;
-    const idx = order.findIndex((c) => isSameChoice(c, opts.deprioritize!));
-    if (idx !== -1 && idx < order.length - 1) {
-      const [demoted] = order.splice(idx, 1);
-      order = [...order, demoted];
+    const list = provider === 'gemini' ? geminiRanked : groqRanked;
+    const idx = list.indexOf(model);
+    if (idx !== -1 && idx < list.length - 1) {
+      list.splice(idx, 1);
+      list.push(model);
     }
     if (idx !== -1) log(`[ai-model-picker] Deprioritizing model that was overloaded (503) last run: ${provider} (${model})`);
+  }
+
+  const toChoices = (provider: Provider, models: string[]) => models.map((model) => ({ provider, model }));
+
+  let order: ModelChoice[];
+  if (opts.interleaveTop && opts.interleaveTop > 0) {
+    const n = opts.interleaveTop;
+    const gTop = toChoices('gemini', geminiRanked.slice(0, n));
+    const qTop = toChoices('groq', groqRanked.slice(0, n));
+    const interleaved: ModelChoice[] = [];
+    for (let i = 0; i < Math.max(gTop.length, qTop.length); i++) {
+      if (gTop[i]) interleaved.push(gTop[i]);
+      if (qTop[i]) interleaved.push(qTop[i]);
+    }
+    order = [...interleaved, ...toChoices('gemini', geminiRanked.slice(n)), ...toChoices('groq', groqRanked.slice(n))];
+  } else {
+    order = [...toChoices('gemini', geminiRanked), ...toChoices('groq', groqRanked)];
   }
 
   if (opts.preferredFirst) {
