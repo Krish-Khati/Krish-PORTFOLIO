@@ -13,8 +13,13 @@
  * GROQ_API_KEY) stay server-side. Only the signed-in admin can call this (same check as rebuild).
  */
 
-import { pickModelOrder, type ModelChoice } from '../scripts/src/ai-model-picker';
+import type { ModelChoice } from '../scripts/src/ai-model-picker.js';
 import { env, json, requireAdmin, supabaseUrl } from './_admin';
+
+// The picker lives under scripts/ ("type": "module"), so it compiles to an ES module. This file is
+// CommonJS, and Vercel's launcher does not allow require() of an ES module (ERR_REQUIRE_ESM) —
+// a dynamic import() is the one way in that works everywhere.
+const loadPicker = () => import('../scripts/src/ai-model-picker.js');
 
 const MAX_ALT = 120;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -141,6 +146,7 @@ export async function POST(request: Request): Promise<Response> {
   const started = Date.now();
   let order: ModelChoice[];
   try {
+    const { pickModelOrder } = await loadPicker();
     order = await pickModelOrder({ geminiApiKey, groqApiKey, interleaveTop: 2 });
   } catch (err) {
     return json(502, { error: `Could not list AI models: ${err instanceof Error ? err.message : String(err)}` });
