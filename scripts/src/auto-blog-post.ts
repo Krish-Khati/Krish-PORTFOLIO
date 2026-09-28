@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI, Type } from '@google/genai';
+import { ApiError, GoogleGenAI, Type } from '@google/genai';
 
 /*
  * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for
@@ -32,9 +32,22 @@ type GeneratedPost = { title: string; excerpt: string; category: Category; block
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// Aliased to the current default Flash model — Google updates what this points to, so this
-// script never needs its model name bumped by hand.
-const MODEL = 'gemini-flash-latest';
+// Both aliased to Google's current default for their model family, so this script never needs
+// a model name bumped by hand. The fallback is a different family (Flash-Lite, not Flash), so
+// it has its own capacity pool — useful when the primary is overloaded (503) rather than broken.
+const PRIMARY_MODEL = 'gemini-flash-latest';
+const FALLBACK_MODEL = 'gemini-flash-lite-latest';
+
+// ~20s, 40s, 80s, 120s — matches Gemini's own guidance to back off hard on 503/429s.
+const RETRY_DELAYS_MS = [20_000, 40_000, 80_000, 120_000];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof ApiError) return err.status === 503 || err.status === 429;
+  const message = err instanceof Error ? err.message : String(err);
+  return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|network|socket hang up/i.test(message);
+}
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
@@ -174,15 +187,49 @@ function validate(data: unknown, existingTitles: string[]): { ok: true; post: Ge
   return { ok: true, post: { title: d.title.trim(), excerpt: d.excerpt.trim(), category: d.category as Category, blocks } };
 }
 
-async function generateOnce(prompt: string) {
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: { responseMimeType: 'application/json', responseSchema },
-  });
-  const text = response.text;
-  if (!text) throw new Error('Gemini returned an empty response.');
-  return JSON.parse(text) as unknown;
+// Calls one model, retrying on 503/429/network errors with increasing waits. Any other error
+// (bad API key, invalid request, etc.) is not retried and is thrown straight away.
+async function callModel(model: string, prompt: string): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { responseMimeType: 'application/json', responseSchema },
+      });
+      const text = response.text;
+      if (!text) throw new Error('Gemini returned an empty response.');
+      return JSON.parse(text) as unknown;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      if (!isRetryableError(err) || attempt >= RETRY_DELAYS_MS.length) {
+        console.error(`[${model}] attempt ${attempt + 1} failed, giving up: ${reason}`);
+        throw err;
+      }
+      const wait = RETRY_DELAYS_MS[attempt];
+      console.warn(`[${model}] attempt ${attempt + 1} failed (${reason}) — retrying in ${wait / 1000}s…`);
+      await sleep(wait);
+    }
+  }
+}
+
+async function generateOnce(prompt: string): Promise<unknown> {
+  try {
+    return await callModel(PRIMARY_MODEL, prompt);
+  } catch (primaryErr) {
+    if (!isRetryableError(primaryErr)) throw primaryErr;
+    const primaryReason = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+    console.warn(`"${PRIMARY_MODEL}" failed after every retry (${primaryReason}) — falling back to "${FALLBACK_MODEL}"…`);
+    try {
+      return await callModel(FALLBACK_MODEL, prompt);
+    } catch (fallbackErr) {
+      const fallbackReason = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      throw new Error(
+        `Gemini was unavailable on both "${PRIMARY_MODEL}" and "${FALLBACK_MODEL}" after retries. ` +
+        `Primary: ${primaryReason}. Fallback: ${fallbackReason}.`,
+      );
+    }
+  }
 }
 
 async function generateValidPost(opts: {
