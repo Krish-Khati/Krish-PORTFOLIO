@@ -12,6 +12,28 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-29 — Project gallery redesign, project pages, automatic image SEO
+
+**Public site**
+- "04 / Selected practice — Things built to learn." now shows stacked project blocks instead of the numbered list: a gallery card (main image with prev/next arrows, "1 / 4" counter, green dots, thumbnail row, captions, fade, lazy loading, swipe, arrow keys, optional YouTube/video slide, `object-fit: contain` so phone and desktop screenshots both fit) beside a details card (name + badge pill, description, Key Features with green square bullets, Technology Stack pills, Live demo / GitHub / Play Store buttons, hidden when empty). Sides alternate on desktop; on phones the gallery sits on top. Projects without images show a green gradient placeholder. The home page shows featured projects (all when none are featured) with a "See all" link.
+- New `/projects/<slug>` pages: the same layout plus the long write-up, blog posts that mention the project, previous/next project. `/projects` uses the same blocks for every project.
+- SEO: `<title>` "<Project> – Krish", meta description, canonical, Open Graph/Twitter with the cover image and its size, JSON-LD `SoftwareApplication` (projects with a live/Play Store link) or `CreativeWork`, plus `BreadcrumbList`. Prerendered by `scripts/prerender.ts` and listed in `sitemap.xml` with `lastmod`.
+
+**Admin**
+- Projects page: cards with cover, badge, featured star, image/feature counts, meta-description status; reordering or deleting redeploys the site (reorders are batched).
+- New full-page project editor (`/admin/projects/:id`): name, slug, badge, short description, write-up (with preview), key features (add/remove/reorder), tech stack tags, live/GitHub/Play Store/video links, featured toggle, display order, meta description with 140–160 counter and Google preview. Saving triggers the Vercel redeploy.
+- Gallery manager: multi-file drag & drop or click (JPG/PNG/WebP, ≤ 5 MB each) with per-file progress and real error messages; drag or arrows to reorder, "Set as cover", delete, editable alt text + caption, "Regenerate alt text". Existing single project images become the first gallery image.
+
+**Automatic image SEO** (`src/admin/image-seo.ts`, `api/alt-text.ts`)
+- In the browser: resize to ≤ 1600px wide, WebP ~80% (EXIF stripped by re-encoding), a 320px thumbnail, width/height saved for the `<img>` tags, file name `<project-slug>-<short-description>-<n>.webp`.
+- `api/alt-text.ts` (Vercel function, admin-only like `api/rebuild.ts`): sends the image + project name/description to a vision-capable model chosen live by `scripts/src/ai-model-picker.ts` (Gemini, then Groq vision models) — alt text ≤ 120 chars that mentions the project, never "image of". Falls back to "<Project> screenshot <n>". Needs `GEMINI_API_KEY` and/or `GROQ_API_KEY` in Vercel.
+- `api/tsconfig.json` now uses `"module": "NodeNext"` so `api/*` stays CommonJS while the shared picker (under `scripts/`, `"type": "module"`) compiles as a real ES module — verified by loading the built function the way Vercel does.
+
+**Database**: one file, `supabase/add-project-details.sql` (all `if not exists`; also sets up the `covers` storage bucket). **Owner action needed:** run it once. Until then the site, admin and build skip the missing columns with a warning and keep using each project's name, description, link and image.
+
+**Verification**
+- Typecheck ✅, `vercel build` ✅ (prerender against live Supabase without the new columns ✅), headless Chrome at 1366/414/390/375px: new layout, arrows/keys/thumbnails/swipe, portrait images contained, no horizontal overflow ✅; admin demo mode: multi-upload, WebP + size, invalid-file error, fallback alt text, set as cover, save ✅.
+
 ### 2026-09-28 (3) — Fully automatic SEO (prerendering, sitemap/RSS, SEO auto-posts, admin SEO panel)
 
 **Search engines now see real HTML**

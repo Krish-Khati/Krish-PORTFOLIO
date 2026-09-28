@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Link } from 'wouter';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
+import { ProjectShowcase } from '@/components/project-showcase';
 import { useProjects, useSiteSettings } from '@/data/live';
 import { projectsMeta } from '@/seo/meta';
 import { useSeo } from '@/seo/use-seo';
 
-// Standalone, indexable version of the home page's "Things built to learn." section.
+// Standalone, indexable version of the home page's "Things built to learn." section — every project.
 export default function ProjectsPage() {
   const { data: projectList } = useProjects();
   const settings = useSiteSettings();
@@ -31,21 +32,9 @@ export default function ProjectsPage() {
             </div>
             <p>{projectList?.length || 'A few'} projects. Each one a sharper question, a new constraint, and another reason to keep going.</p>
           </div>
-          <div className="project-list" data-testid="list-projects-page">
-            {(projectList ?? []).map((project) => (
-              <article className="project-row" key={project.number}>
-                {project.image && <img className="project-thumb" src={project.image} alt={`${project.name} screenshot`} loading="lazy" decoding="async" />}
-                <div className="project-number">{project.number}</div>
-                <h2 className="project-name">{project.name}</h2>
-                <div className="project-description">{project.description}</div>
-                {project.url ? (
-                  <a className="project-link" href={project.url} target="_blank" rel="noreferrer">
-                    View on GitHub <ArrowUpRight size={14} />
-                  </a>
-                ) : (
-                  <span className="project-link">Personal project</span>
-                )}
-              </article>
+          <div className="pj-list" data-testid="list-projects-page">
+            {(projectList ?? []).map((project, i) => (
+              <ProjectShowcase key={project.slug} project={project} flip={i % 2 === 1} level={2} priority={i === 0} />
             ))}
           </div>
           <div className="projects-page-cta">

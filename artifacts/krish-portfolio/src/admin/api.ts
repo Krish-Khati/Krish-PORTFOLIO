@@ -1,7 +1,7 @@
 import { blogPosts, type BlogPost, postFromRow } from '@/data/blog';
-import { projects as seedProjects } from '@/data/projects';
+import { type Project, projectFromRow, projects as seedProjects } from '@/data/projects';
 import { tools as seedTools, stats as seedStats } from '@/data/skills';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 /*
  * Admin data layer.
@@ -16,7 +16,10 @@ export type PostCategory = BlogPost['category'];
 export const postCategories: PostCategory[] = ['Journey', 'Learning', 'Projects', 'AI', 'Marketing'];
 
 export type AdminPost = BlogPost & { id: string; status: PostStatus; updatedAt: string };
-export type AdminProject = { id: string; name: string; description: string; url: string; image: string; position: number };
+export type AdminProject = Omit<Project, 'number'> & { id: string; position: number };
+export type ProjectInput = Omit<AdminProject, 'id' | 'position' | 'updatedAt'> & { id?: string };
+/** A saved project; `warning` is set when some columns couldn't be saved yet (SQL file not run). */
+export type SavedProject = AdminProject & { warning?: string };
 export type AdminTool = { id: string; name: string; logoUrl: string; position: number };
 export type AdminStat = { id: string; value: string; label: string; position: number };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
@@ -39,8 +42,12 @@ export type SiteSettings = {
   aboutPhoto: string;
 };
 
+// Demo projects are kept as database-shaped rows, so they go through the same projectFromRow()
+// mapping as Supabase rows (and older demo data in localStorage keeps working).
+type ProjectRow = Record<string, unknown> & { id: string; position: number };
+
 type Db = {
-  posts: AdminPost[]; projects: AdminProject[]; tools: AdminTool[]; stats: AdminStat[];
+  posts: AdminPost[]; projects: ProjectRow[]; tools: AdminTool[]; stats: AdminStat[];
   messages: AdminMessage[]; settings: SiteSettings;
   topics: AdminTopic[]; autoPostSettings: AutoPostSettings; autoRuns: AdminAutoRun[];
 };
@@ -63,7 +70,7 @@ function seed(): Db {
   };
   return {
     posts: blogPosts.map((p) => ({ ...p, id: uid(), status: 'published', updatedAt: `${p.date}T10:00:00.000Z` })),
-    projects: seedProjects.map((p, i) => ({ id: uid(), name: p.name, description: p.description, url: p.url, image: p.image ?? '', position: i })),
+    projects: seedProjects.map((p, i) => ({ id: uid(), ...projectPayload({ ...p }), position: i })),
     tools: seedTools.map((t, i) => ({ id: uid(), name: t.name, logoUrl: t.logoUrl, position: i })),
     stats: seedStats.map((s, i) => ({ id: uid(), value: s.value, label: s.label, position: i })),
     messages: [
@@ -155,17 +162,63 @@ function demo_deletePost(id: string) {
 
 /* ---------- Projects ---------- */
 
-function demo_listProjects() {
-  return delay([...db().projects].sort((a, b) => a.position - b.position));
+const toAdminProject = (row: Record<string, unknown>, index: number): AdminProject => {
+  const { number: _n, ...p } = projectFromRow(row, index);
+  return { ...p, id: String(row.id), position: typeof row.position === 'number' ? row.position : index };
+};
+
+/** The database columns for a project. `url`/`image` keep the older single link/thumbnail in sync. */
+function projectPayload(input: Omit<ProjectInput, 'id'>): Record<string, unknown> {
+  return {
+    name: input.name,
+    description: input.description,
+    slug: input.slug,
+    badge: input.badge,
+    long_description: input.writeup,
+    features: input.features,
+    tech_stack: input.techStack,
+    live_url: input.liveUrl,
+    github_url: input.githubUrl,
+    play_store_url: input.playStoreUrl,
+    video_url: input.videoUrl,
+    featured: input.featured,
+    meta_description: input.metaDescription,
+    gallery: input.gallery,
+    url: input.githubUrl || input.liveUrl || input.playStoreUrl,
+    image: input.gallery[0]?.url ?? '',
+    updated_at: now(),
+  };
 }
 
-function demo_saveProject(input: Omit<AdminProject, 'id' | 'position'> & { id?: string }) {
+function demo_listProjects() {
+  return delay([...db().projects].sort((a, b) => a.position - b.position).map(toAdminProject));
+}
+
+async function demo_saveProject(input: ProjectInput): Promise<SavedProject> {
   const list = db().projects;
-  const existing = input.id ? list.find((p) => p.id === input.id) : undefined;
-  if (existing) Object.assign(existing, input);
-  else list.push({ ...input, id: uid(), position: list.length ? Math.max(...list.map((p) => p.position)) + 1 : 0 });
+  const clash = list.find((p) => p.id !== input.id && projectFromRow(p, 0).slug === input.slug);
+  if (clash) throw new Error(`Another project already uses the URL /projects/${input.slug}.`);
+  const payload = projectPayload(input);
+  let row = input.id ? list.find((p) => p.id === input.id) : undefined;
+  if (row) Object.assign(row, payload);
+  else {
+    row = { ...payload, id: uid(), position: list.length ? Math.max(...list.map((p) => p.position)) + 1 : 0 };
+    list.push(row);
+  }
   commit();
-  return delay(true);
+  return delay(toAdminProject(row, 0));
+}
+
+function demo_setProjectPosition(id: string, index: number) {
+  const list = [...db().projects].sort((a, b) => a.position - b.position);
+  const from = list.findIndex((p) => p.id === id);
+  if (from >= 0) {
+    const [moved] = list.splice(from, 1);
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, moved);
+    list.forEach((p, i) => { p.position = i; });
+    commit();
+  }
+  return delay(true, 60);
 }
 
 function demo_moveProject(id: string, direction: -1 | 1) {
@@ -404,6 +457,11 @@ const sb = () => supabase!;
 
 // Columns added by later SQL files; saving works without them (with a warning).
 const OPTIONAL_POST_COLUMNS = ['cover', 'seo_title', 'meta_description', 'focus_keyword', 'faqs', 'cover_alt'];
+// Everything add-project-details.sql adds (only name/description/url/position are original).
+const OPTIONAL_PROJECT_COLUMNS = [
+  'image', 'slug', 'badge', 'long_description', 'features', 'tech_stack', 'live_url', 'github_url',
+  'play_store_url', 'video_url', 'featured', 'meta_description', 'gallery', 'updated_at',
+];
 
 // PostgREST: "Could not find the 'seo_title' column of 'posts' in the schema cache" (PGRST204);
 // Postgres: 'column "seo_title" of relation "posts" does not exist' (42703).
@@ -461,26 +519,49 @@ const remote = {
     return true;
   },
   async listProjects() {
-    return check(await sb().from('projects').select('*').order('position')) as AdminProject[];
+    // '*' so this keeps working whether or not the add-project-details.sql columns exist yet
+    const rows = check(await sb().from('projects').select('*').order('position'));
+    return (rows as Record<string, unknown>[]).map(toAdminProject);
   },
-  async saveProject(input: Omit<AdminProject, 'id' | 'position'> & { id?: string }) {
-    const { id, ...rest } = input;
-    if (id) {
-      const res = await sb().from('projects').update(rest).eq('id', id);
-      if (res.error && /image/.test(res.error.message)) {
-        throw new Error('Project images are not set up in the database yet. Run supabase/add-project-images.sql in the Supabase SQL editor.');
-      }
-      check(res);
-    } else {
+  async saveProject(input: ProjectInput): Promise<SavedProject> {
+    const { id } = input;
+    const payload = projectPayload(input);
+    if (!id) {
       const last = check(await sb().from('projects').select('position').order('position', { ascending: false }).limit(1));
       const top = (last ?? []) as { position: number }[];
-      const position = top.length ? top[0].position + 1 : 0;
-      const res = await sb().from('projects').insert({ ...rest, position });
-      if (res.error && /image/.test(res.error.message)) {
-        throw new Error('Project images are not set up in the database yet. Run supabase/add-project-images.sql in the Supabase SQL editor.');
-      }
-      check(res);
+      payload.position = top.length ? top[0].position + 1 : 0;
     }
+
+    // A column that doesn't exist yet (SQL file not run) is dropped with a warning instead of
+    // failing the whole save — the project itself still saves.
+    const skipped: string[] = [];
+    for (;;) {
+      const res = id
+        ? await sb().from('projects').update(payload).eq('id', id).select().single()
+        : await sb().from('projects').insert(payload).select().single();
+      if (res.error?.code === '23505') throw new Error(`Another project already uses the URL /projects/${input.slug}.`);
+      const missing = res.error ? missingColumn(res.error.message) : undefined;
+      if (missing && missing in payload && OPTIONAL_PROJECT_COLUMNS.includes(missing)) {
+        console.warn(`[projects] Column "${missing}" doesn't exist yet — saving without it.`);
+        delete payload[missing];
+        skipped.push(missing);
+        continue;
+      }
+      const saved: SavedProject = toAdminProject(check(res) as Record<string, unknown>, 0);
+      if (skipped.length) {
+        saved.warning = `Saved, but without ${skipped.join(', ')} — run supabase/add-project-details.sql in the Supabase SQL editor, then save again.`;
+      }
+      return saved;
+    }
+  },
+  async setProjectPosition(id: string, index: number) {
+    const list = await remote.listProjects();
+    const from = list.findIndex((p) => p.id === id);
+    if (from < 0) return true;
+    const [moved] = list.splice(from, 1);
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, moved);
+    const changes = list.map((p, i) => (p.position === i ? null : sb().from('projects').update({ position: i }).eq('id', p.id))).filter(Boolean);
+    (await Promise.all(changes)).forEach((r) => check(r!));
     return true;
   },
   async moveProject(id: string, direction: -1 | 1) {
@@ -676,6 +757,108 @@ export async function uploadImage(file: File, folder = '', maxMB?: number): Prom
 
 export const uploadCover = uploadImage;
 
+/* ---------- Project gallery uploads (per-file progress) ---------- */
+
+const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
+
+/** The public URL prefix of the uploads bucket — images under it can be re-read by /api/alt-text. */
+export const storagePublicPrefix = () => (supabase ? `${supabaseUrl}/storage/v1/object/public/${COVER_BUCKET}/` : '');
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read the optimized image.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function storageError(status: number, body: string) {
+  let msg = body;
+  try {
+    const j = JSON.parse(body) as { message?: string; error?: string };
+    msg = j.message || j.error || body;
+  } catch { /* not JSON */ }
+  if (/bucket not found/i.test(msg)) return 'The image storage bucket is missing. Run supabase/add-project-details.sql in the Supabase SQL editor.';
+  if (/row-level security|unauthorized|not allowed/i.test(msg) || status === 403) {
+    return 'Supabase refused the upload (storage permissions). Run supabase/add-project-details.sql, or sign in again.';
+  }
+  if (status === 413 || /too large|exceeded/i.test(msg)) return 'Supabase says the file is too large.';
+  return `Upload failed (HTTP ${status}${msg ? `: ${msg.slice(0, 160)}` : ''}).`;
+}
+
+/**
+ * Uploads a gallery file to Supabase Storage at `path` (inside the covers bucket) and returns its
+ * public URL. Uses XHR instead of supabase-js so `onProgress` gets real 0–1 upload progress.
+ * If the name is already taken, a short suffix is added. Demo mode returns a data URL instead.
+ */
+export async function uploadGalleryFile(blob: Blob, path: string, onProgress?: (fraction: number) => void): Promise<string> {
+  if (!supabase) {
+    if (blob.size > MAX_DEMO_COVER_MB * 1024 * 1024) throw new Error(`Demo mode keeps images in this browser — the limit is ${MAX_DEMO_COVER_MB} MB.`);
+    onProgress?.(1);
+    return blobToDataUrl(blob);
+  }
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Your admin session has expired. Sign in again.');
+
+  const send = (target: string) =>
+    new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${supabaseUrl}/storage/v1/object/${COVER_BUCKET}/${encodePath(target)}`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('apikey', supabaseAnonKey);
+      xhr.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+      xhr.setRequestHeader('Cache-Control', 'max-age=31536000');
+      xhr.setRequestHeader('x-upsert', 'false');
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+      xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
+      xhr.onerror = () => reject(new Error('Network error while uploading — check your connection and try again.'));
+      xhr.ontimeout = () => reject(new Error('The upload timed out.'));
+      xhr.timeout = 120_000;
+      xhr.send(blob);
+    });
+
+  let target = path;
+  let res = await send(target);
+  if (res.status === 409 || /already exists|duplicate/i.test(res.body)) {
+    target = path.replace(/(\.\w+)$/, `-${uid().slice(0, 4)}$1`);
+    res = await send(target);
+  }
+  if (res.status < 200 || res.status >= 300) throw new Error(storageError(res.status, res.body));
+  onProgress?.(1);
+  return `${storagePublicPrefix()}${encodePath(target)}`;
+}
+
+export type AltTextResult = { ok: true; alt: string; model: string } | { ok: false; error: string };
+
+/**
+ * Asks the server (api/alt-text.ts) to write alt text for a screenshot with a vision model.
+ * Send either a data URL (`image`) or the public URL of an image already in our storage.
+ */
+export async function requestAltText(input: {
+  image?: string; imageUrl?: string; projectName: string; projectDescription: string;
+}): Promise<AltTextResult> {
+  if (!supabase) return { ok: false, error: 'Demo mode — AI alt text needs the live site.' };
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { ok: false, error: 'Not signed in.' };
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}api/alt-text`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
+    if (!isJson) return { ok: false, error: 'The alt text endpoint only exists on the deployed site (not in local dev).' };
+    const body = (await res.json().catch(() => ({}))) as { alt?: string; model?: string; error?: string };
+    if (res.ok && body.alt) return { ok: true, alt: body.alt, model: body.model ?? '' };
+    return { ok: false, error: body.error ?? `Alt text failed (HTTP ${res.status}).` };
+  } catch {
+    return { ok: false, error: 'Could not reach the alt text endpoint.' };
+  }
+}
+
 /* ================= Public API ================= */
 
 export const listPosts = () => (supabase ? remote.listPosts() : demo_listPosts());
@@ -683,8 +866,11 @@ export const getPost = (id: string) => (supabase ? remote.getPost(id) : demo_get
 export const savePost = (input: PostInput): Promise<SavedPost> => (supabase ? remote.savePost(input) : demo_savePost(input));
 export const deletePost = (id: string) => (supabase ? remote.deletePost(id) : demo_deletePost(id));
 export const listProjects = () => (supabase ? remote.listProjects() : demo_listProjects());
-export const saveProject = (input: Omit<AdminProject, 'id' | 'position'> & { id?: string }) =>
+export const saveProject = (input: ProjectInput): Promise<SavedProject> =>
   supabase ? remote.saveProject(input) : demo_saveProject(input);
+/** Moves a project to `index` (0 = first) in the display order. */
+export const setProjectPosition = (id: string, index: number) =>
+  supabase ? remote.setProjectPosition(id, index) : demo_setProjectPosition(id, index);
 export const moveProject = (id: string, direction: -1 | 1) =>
   supabase ? remote.moveProject(id, direction) : demo_moveProject(id, direction);
 export const deleteProject = (id: string) => (supabase ? remote.deleteProject(id) : demo_deleteProject(id));

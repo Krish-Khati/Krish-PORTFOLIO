@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { blogPosts, type BlogPost, postFromRow, withCover } from './blog';
-import { projects as staticProjects, type Project } from './projects';
+import { projectFromRow, projects as staticProjects, type Project } from './projects';
 import { defaultPublicSettings, type PublicSettings } from './settings';
 import { stats as staticStats, type Stat, tools as staticTools, type Tool } from './skills';
 
@@ -37,16 +37,10 @@ export function useProjects() {
     queryKey: ['public', 'projects'],
     queryFn: async (): Promise<Project[]> => {
       if (!supabase) return staticProjects;
-      // '*' so this keeps working whether or not the optional image column exists yet
+      // '*' so this keeps working whether or not the optional columns (add-project-details.sql) exist yet
       const { data, error } = await supabase.from('projects').select('*').order('position');
       if (error) throw error;
-      return (data as (Omit<Project, 'number'> & { position: number })[]).map((p, i) => ({
-        number: String(i + 1).padStart(2, '0'),
-        name: p.name,
-        description: p.description,
-        url: p.url,
-        image: p.image ?? '',
-      }));
+      return (data as Record<string, unknown>[]).map(projectFromRow);
     },
     initialData: supabase ? undefined : staticProjects,
     staleTime: 60_000,

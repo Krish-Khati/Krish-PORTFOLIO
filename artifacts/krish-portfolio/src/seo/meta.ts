@@ -1,5 +1,5 @@
 import type { BlogPost } from '../data/blog';
-import type { Project } from '../data/projects';
+import { type Project, projectCover, projectPath } from '../data/projects';
 import type { PublicSettings } from '../data/settings';
 import { escapeHtml, stripInline } from './inline';
 import {
@@ -20,6 +20,8 @@ export type PageMeta = {
   path: string; // canonical path, e.g. /blog/my-post
   image: string;
   imageAlt: string;
+  imageWidth?: number;
+  imageHeight?: number;
   type: 'website' | 'article';
   publishedTime?: string;
   modifiedTime?: string;
@@ -159,17 +161,78 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
           itemListElement: projects.map((p, i) => ({
             '@type': 'ListItem',
             position: i + 1,
-            item: {
-              '@type': 'CreativeWork',
-              name: p.name,
-              description: p.description,
-              ...(p.url ? { url: p.url } : {}),
-              author: { '@id': PERSON_ID },
-            },
+            url: absoluteUrl(projectPath(p.slug)),
+            name: p.name,
           })),
         },
       },
       breadcrumbJsonLd([{ name: 'Home', path: '/' }, { name: 'Projects', path: '/projects' }]),
+    ],
+  };
+}
+
+export const projectSeoTitle = (p: Project) => `${p.name} – Krish`;
+
+export const projectMetaDescription = (p: Project) =>
+  clip(p.metaDescription.trim() || p.description.trim() || stripInline(p.writeup.split(/\n\s*\n/)[0] ?? '') || `${p.name}, a project by Krish.`, 160);
+
+// Only real, public http(s) URLs are worth putting in structured data (not demo-mode data: URLs).
+const publicImage = (url: string) => (/^(https?:)?\/\//i.test(url) || url.startsWith('/') ? absoluteUrl(url) : '');
+
+export function projectMeta(p: Project, s: PublicSettings): PageMeta {
+  const path = projectPath(p.slug);
+  const url = absoluteUrl(path);
+  const cover = projectCover(p);
+  const coverUrl = cover ? publicImage(cover.url) : '';
+  const image = coverUrl || absoluteUrl(DEFAULT_OG_IMAGE);
+  const screenshots = p.gallery.map((g) => publicImage(g.url)).filter(Boolean);
+  const description = projectMetaDescription(p);
+
+  // An app you can open or install is a SoftwareApplication; anything else is a CreativeWork.
+  const app = p.playStoreUrl || p.liveUrl;
+  const main: JsonLd = {
+    '@context': 'https://schema.org',
+    '@type': app ? 'SoftwareApplication' : 'CreativeWork',
+    '@id': `${url}#project`,
+    name: p.name,
+    description,
+    url,
+    image: [image],
+    author: personRef(s),
+    creator: personRef(s),
+    inLanguage: 'en',
+    isAccessibleForFree: true,
+    ...(p.updatedAt ? { dateModified: p.updatedAt } : {}),
+    ...(p.techStack.length ? { keywords: p.techStack.join(', ') } : {}),
+    ...(screenshots.length && app ? { screenshot: screenshots } : {}),
+    ...(app
+      ? {
+        applicationCategory: p.playStoreUrl ? 'MobileApplication' : 'WebApplication',
+        operatingSystem: p.playStoreUrl ? 'Android' : 'Any (web browser)',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+        ...(p.liveUrl || p.playStoreUrl ? { installUrl: p.playStoreUrl || p.liveUrl } : {}),
+      }
+      : {}),
+    ...([p.githubUrl, p.liveUrl, p.playStoreUrl].filter(Boolean).length
+      ? { sameAs: [p.githubUrl, p.liveUrl, p.playStoreUrl].filter(Boolean) }
+      : {}),
+  };
+
+  return {
+    title: projectSeoTitle(p),
+    description,
+    path,
+    image,
+    imageAlt: cover ? cover.alt.trim() || `${p.name} screenshot 1` : DEFAULT_OG_ALT,
+    ...(coverUrl && cover?.width && cover.height ? { imageWidth: cover.width, imageHeight: cover.height } : {}),
+    type: 'website',
+    jsonLd: [
+      main,
+      breadcrumbJsonLd([
+        { name: 'Home', path: '/' },
+        { name: 'Projects', path: '/projects' },
+        { name: p.name, path },
+      ]),
     ],
   };
 }
@@ -291,6 +354,11 @@ export function headTags(meta: PageMeta): HeadTag[] {
     tags.push(
       { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
       { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+    );
+  } else if (meta.imageWidth && meta.imageHeight) {
+    tags.push(
+      { tag: 'meta', attrs: { property: 'og:image:width', content: String(meta.imageWidth) } },
+      { tag: 'meta', attrs: { property: 'og:image:height', content: String(meta.imageHeight) } },
     );
   }
   if (meta.type === 'article') {

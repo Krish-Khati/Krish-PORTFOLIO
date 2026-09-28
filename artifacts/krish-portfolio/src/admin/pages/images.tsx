@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ImagePlus } from 'lucide-react';
+import { Link } from 'wouter';
 import { toast } from '@/hooks/use-toast';
-import { getSettings, listProjects, saveProject, saveSettings, type SiteSettings } from '../api';
+import { getSettings, listProjects, saveSettings, type SiteSettings } from '../api';
 import { ImagePicker, PageHeader, Skeleton } from '../ui';
 
 export default function ImagesPage() {
@@ -14,15 +16,6 @@ export default function ImagesPage() {
       qc.invalidateQueries({ queryKey: ['admin', 'settings'] });
       toast({ title: 'Image updated' });
     },
-  });
-
-  const saveProjectImage = useMutation({
-    mutationFn: (input: { id: string; name: string; description: string; url: string; image: string }) => saveProject(input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'projects'] });
-      toast({ title: 'Project image updated' });
-    },
-    onError: (err) => toast({ title: 'Could not save', description: err instanceof Error ? err.message : undefined }),
   });
 
   return (
@@ -58,25 +51,24 @@ export default function ImagesPage() {
       )}
 
       <section className="adm-card adm-rise" style={{ animationDelay: '.12s' }}>
-        <h2 className="adm-section-title">Project images</h2>
-        <p className="adm-muted adm-small">A thumbnail shown next to each project in "Things built to learn."</p>
+        <h2 className="adm-section-title">Project screenshots</h2>
+        <p className="adm-muted adm-small">
+          Each project now has its own screenshot gallery (with automatic WebP, resizing and alt text).
+          Open a project on the Projects page to add or reorder its images.
+        </p>
         {projectsLoading || !projects ? (
-          <Skeleton rows={3} />
+          <Skeleton rows={2} />
         ) : !projects.length ? (
           <p className="adm-muted adm-small">Add a project on the Projects page first.</p>
         ) : (
           <div className="adm-images-projects">
             {projects.map((p) => (
-              <div className="adm-images-project" key={p.id}>
-                <ImagePicker
-                  aspect="1 / 1"
-                  small
-                  value={p.image}
-                  busy={saveProjectImage.isPending}
-                  onChange={(image) => saveProjectImage.mutate({ id: p.id, name: p.name, description: p.description, url: p.url, image })}
-                />
-                <span>{p.name}</span>
-              </div>
+              <Link href={`/projects/${p.id}`} className="adm-images-project" key={p.id}>
+                <span className="adm-images-thumb">
+                  {p.gallery[0] ? <img src={p.gallery[0].thumb || p.gallery[0].url} alt="" loading="lazy" /> : <ImagePlus size={18} />}
+                </span>
+                <span>{p.name} · {p.gallery.length}</span>
+              </Link>
             ))}
           </div>
         )}

@@ -11,6 +11,7 @@ import DashboardPage from './pages/dashboard';
 import PostsPage from './pages/posts';
 import PostEditorPage from './pages/post-editor';
 import ProjectsPage from './pages/projects';
+import ProjectEditorPage from './pages/project-editor';
 import ImagesPage from './pages/images';
 import SkillsPage from './pages/skills';
 import AutoPostsPage from './pages/auto-posts';
@@ -58,6 +59,8 @@ function AdminRoutes() {
         <Route path="/posts/new">{() => <PostEditorPage />}</Route>
         <Route path="/posts/:id">{(params) => <PostEditorPage id={params.id} />}</Route>
         <Route path="/projects" component={ProjectsPage} />
+        <Route path="/projects/new">{() => <ProjectEditorPage />}</Route>
+        <Route path="/projects/:id">{(params) => <ProjectEditorPage id={params.id} />}</Route>
         <Route path="/images" component={ImagesPage} />
         <Route path="/skills" component={SkillsPage} />
         <Route path="/auto-posts" component={AutoPostsPage} />

@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Code2, Columns2, Eye, Heading2, ImagePlus, Link2, List, Loader2, PenLine, Plus, Quote, Save, Trash2, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { toast } from '@/hooks/use-toast';
-import type { BlogBlock, BlogFaq } from '@/data/blog';
-import { InlineText } from '@/components/rich-text';
+import type { BlogFaq } from '@/data/blog';
+import { PostBlocks } from '@/components/post-blocks';
 import { firstParagraph } from '@/seo/meta';
 import { META_MAX, META_MIN, SEO_TITLE_MAX, seoScore } from '@/seo/score';
 import {
@@ -272,7 +272,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
                 {draft.title && <h1 className="post-title">{draft.title}</h1>}
                 {draft.excerpt && <p className="post-lede">{draft.excerpt}</p>}
                 <div className="post-body">
-                  {blocks.length ? <Blocks blocks={blocks} /> : <p className="adm-muted">Preview appears here as you type.</p>}
+                  {blocks.length ? <PostBlocks blocks={blocks} /> : <p className="adm-muted">Preview appears here as you type.</p>}
                 </div>
               </div>
             )}
@@ -484,18 +484,3 @@ function CoverPicker({ value, onChange, alt, onAltChange }: {
   );
 }
 
-function Blocks({ blocks }: { blocks: BlogBlock[] }) {
-  return (
-    <>
-      {blocks.map((b, i) => {
-        switch (b.type) {
-          case 'h2': return <h2 key={i} className="post-h2">{b.text}</h2>;
-          case 'quote': return <blockquote key={i} className="post-quote"><InlineText text={b.text} /></blockquote>;
-          case 'list': return <ul key={i} className="post-list">{b.items.map((it, j) => <li key={j}><InlineText text={it} /></li>)}</ul>;
-          case 'code': return <pre key={i} className="post-code" data-lang={b.lang}><code>{b.text}</code></pre>;
-          default: return <p key={i} className="post-p"><InlineText text={b.text} /></p>;
-        }
-      })}
-    </>
-  );
-}

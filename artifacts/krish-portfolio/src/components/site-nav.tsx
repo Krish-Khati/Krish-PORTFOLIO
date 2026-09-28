@@ -52,7 +52,7 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
             <a
               href={`${prefix}#${s.id}`}
               className={
-                (location === '/' && !onBlog && active === s.id) || (location === '/projects' && s.id === 'work') ? 'active' : undefined
+                (location === '/' && !onBlog && active === s.id) || (location.startsWith('/projects') && s.id === 'work') ? 'active' : undefined
               }
               onClick={() => setOpen(false)}
             >

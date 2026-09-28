@@ -25,9 +25,24 @@ create table if not exists projects (
   name text not null,
   description text not null default '',
   url text not null default '',
-  image text not null default '', -- project thumbnail URL (see add-post-covers.sql for the storage bucket)
-  position int not null default 0
+  image text not null default '', -- older single thumbnail; the gallery below replaces it
+  position int not null default 0,
+  -- Project details + gallery (older projects: run add-project-details.sql)
+  slug text not null default '',
+  badge text not null default '',
+  long_description text not null default '',
+  features jsonb not null default '[]'::jsonb,
+  tech_stack jsonb not null default '[]'::jsonb,
+  live_url text not null default '',
+  github_url text not null default '',
+  play_store_url text not null default '',
+  video_url text not null default '',
+  featured boolean not null default false,
+  meta_description text not null default '',
+  gallery jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
 );
+create unique index if not exists projects_slug_unique on projects (slug) where slug <> '';
 
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
@@ -67,6 +82,6 @@ create policy "admin manages settings" on site_settings for all to authenticated
 -- Supabase Auth settings so only the admin account exists.
 
 -- Cover image storage: run add-post-covers.sql as well.
--- Existing project table without the image column: run add-project-images.sql.
+-- Existing project table without the gallery/detail columns: run add-project-details.sql.
 -- Existing posts table without the SEO columns: run add-seo.sql.
 -- heroImage / aboutPhoto settings need no migration — they're just new keys in site_settings.data.

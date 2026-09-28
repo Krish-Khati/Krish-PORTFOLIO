@@ -4,12 +4,14 @@
   // one (lib es2022, no types), which doesn't declare the Web APIs these functions use (fetch,
   // Request, Response, AbortSignal). They're built into Vercel's Node 24 runtime, so the DOM lib
   // declares them here. Checked locally by `pnpm run typecheck:api`.
-  // "module": "CommonJS" because the repo's package.json has no "type": "module": Vercel's launcher
-  // loads api/*.js as CommonJS and crashes on ES `export` syntax (FUNCTION_INVOCATION_FAILED).
+  // "module": "NodeNext" picks each file's output format from its nearest package.json, the same way
+  // Node does: api/*.ts (repo root package.json, no "type": "module") compile to CommonJS — Vercel's
+  // launcher loads api/*.js as CommonJS and crashes on ES `export` syntax — while shared code under
+  // scripts/ ("type": "module") compiles to real ES modules, which Node 24 can require().
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "node10",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [],
     "strict": true,

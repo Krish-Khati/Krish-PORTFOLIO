@@ -29,7 +29,9 @@ export function CharCounter({ value, min = 0, max }: { value: string; min?: numb
   );
 }
 
-export function GooglePreview({ title, description, slug, date }: { title: string; description: string; slug: string; date: string }) {
+export function GooglePreview({ title, description, slug, date, section = 'blog' }: {
+  title: string; description: string; slug: string; date?: string; section?: 'blog' | 'projects';
+}) {
   const host = new URL(SITE_URL).host;
   return (
     <div className="adm-serp" aria-label="Google result preview">
@@ -37,10 +39,10 @@ export function GooglePreview({ title, description, slug, date }: { title: strin
         <span className="adm-serp-icon" aria-hidden="true">K</span>
         <span>
           <strong>Krish</strong>
-          <small>{host} › blog › {slug || 'your-post'}</small>
+          <small>{host} › {section} › {slug || (section === 'blog' ? 'your-post' : 'your-project')}</small>
         </span>
       </div>
-      <div className="adm-serp-title">{clip(title || 'Your post title', 60)}</div>
+      <div className="adm-serp-title">{clip(title || (section === 'blog' ? 'Your post title' : 'Your project'), 60)}</div>
       <div className="adm-serp-desc">
         {date && <span>{formatPostDate(date)} — </span>}
         {description ? clip(description, 160) : 'Add a meta description so Google shows your own summary here.'}

@@ -3,13 +3,14 @@ import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { loadEnv } from 'vite';
 import { blogPosts, type BlogBlock, type BlogPost, formatPostDate, postFromRow, readingMinutes, withCover } from '../src/data/blog';
-import { projects as staticProjects, type Project } from '../src/data/projects';
+import { imageAlt, type Project, projectFromRow, projectPath, projects as staticProjects } from '../src/data/projects';
 import { defaultPublicSettings, type PublicSettings } from '../src/data/settings';
+import { textToBlocks } from '../src/lib/text-blocks';
 import { escapeHtml, inlineToHtml } from '../src/seo/inline';
 import {
-  blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectsMeta,
+  blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectMeta, projectsMeta,
 } from '../src/seo/meta';
-import { relatedPosts } from '../src/seo/related';
+import { postsMentioningProject, relatedPosts } from '../src/seo/related';
 import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_URL } from '../src/seo/site';
 
 /*
@@ -22,6 +23,7 @@ import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_URL } from '../src/seo/site';
  *   dist/public/blog/index.html         blog list
  *   dist/public/blog/<slug>/index.html  each published post
  *   dist/public/projects/index.html     projects
+ *   dist/public/projects/<slug>/index.html  each project
  *   dist/public/spa.html                plain app shell for every other URL (admin, new posts)
  *   dist/public/sitemap.xml, rss.xml, robots.txt
  *
@@ -57,13 +59,16 @@ async function loadData(): Promise<SiteData> {
   if (postsRes.error) throw new Error(`[prerender] Could not load posts from Supabase: ${postsRes.error.message}`);
   const posts = (postsRes.data as Record<string, unknown>[]).map((r) => withCover(postFromRow(r)));
 
+  // '*' keeps this working whether or not the add-project-details.sql columns exist yet.
   let projects = fallback.projects;
   const projectsRes = await sb.from('projects').select('*').order('position');
   if (projectsRes.error) console.warn(`[prerender] Could not load projects (${projectsRes.error.message}) — using the static list.`);
   else {
-    projects = (projectsRes.data as { name: string; description: string; url: string; image?: string | null }[]).map((p, i) => ({
-      number: String(i + 1).padStart(2, '0'), name: p.name, description: p.description, url: p.url, image: p.image ?? '',
-    }));
+    const rows = projectsRes.data as Record<string, unknown>[];
+    if (rows.length && !('gallery' in rows[0])) {
+      console.warn('[prerender] projects table has no gallery/detail columns yet — run supabase/add-project-details.sql. Using name, description, url and image only.');
+    }
+    projects = rows.map(projectFromRow);
   }
 
   let settings = fallback.settings;
@@ -105,7 +110,7 @@ function homeBody({ posts, projects, settings }: SiteData) {
 <p>I started teaching myself Python, C, and C++, then moved into web development and exploring AI tools. Every project I've built has come from figuring things out on my own.</p>
 <p>Right now, I'm looking for an entry-level role or internship where I can turn that problem-solving mindset into real software.</p>
 <h2>Projects</h2>
-<ul>${projects.map((p) => `<li>${p.url ? `<a href="${e(p.url)}">${e(p.name)}</a>` : e(p.name)} — ${e(p.description)}</li>`).join('')}</ul>
+<ul>${projects.map((p) => `<li><a href="${projectPath(p.slug)}">${e(p.name)}</a> — ${e(p.description)}</li>`).join('')}</ul>
 <p><a href="/projects">See all projects</a></p>
 <h2>Latest from the blog</h2>
 <ul>${posts.slice(0, 5).map((p) => `<li><a href="${postPath(p.slug)}">${e(p.title)}</a> — ${e(p.excerpt)}</li>`).join('')}</ul>
@@ -143,18 +148,67 @@ ${related.length ? `<section><h2>Related posts</h2><ul>${related.map((r) => `<li
 </main>`;
 }
 
+// Only real http(s)/site URLs go into static HTML (never demo-mode data: URLs).
+const isWebUrl = (u: string) => /^https?:\/\//i.test(u) || u.startsWith('/');
+
+function galleryImg(p: Project, i: number, eager = false) {
+  const g = p.gallery[i];
+  if (!g || !isWebUrl(g.url)) return '';
+  const size = g.width && g.height ? ` width="${g.width}" height="${g.height}"` : '';
+  return `<img src="${e(g.url)}" alt="${e(imageAlt(p, g, i))}"${size} loading="${eager ? 'eager' : 'lazy'}" decoding="async" />`;
+}
+
+function projectLinks(p: Project) {
+  const links = [
+    p.liveUrl && `<a href="${e(p.liveUrl)}">Live demo</a>`,
+    p.githubUrl && `<a href="${e(p.githubUrl)}">GitHub</a>`,
+    p.playStoreUrl && `<a href="${e(p.playStoreUrl)}">Play Store</a>`,
+    p.videoUrl && `<a href="${e(p.videoUrl)}">Watch the video</a>`,
+  ].filter(Boolean);
+  return links.length ? `<p>${links.join(' · ')}</p>` : '';
+}
+
 function projectsBody({ projects }: SiteData) {
   return `<main class="seo-static">${nav}
 <h1>Things built to learn.</h1>
 <p>${projects.length} projects. Each one a sharper question, a new constraint, and another reason to keep going.</p>
-${projects.map((p) => `<article>
-<h2>${e(p.name)}</h2>
+${projects.map((p, i) => `<article>
+<h2><a href="${projectPath(p.slug)}">${e(p.name)}</a></h2>
+${galleryImg(p, 0, i === 0)}
 <p>${e(p.description)}</p>
-${p.url ? `<p><a href="${e(p.url)}">View on GitHub</a></p>` : ''}
+${projectLinks(p)}
 </article>`).join('\n')}
 <p><a href="/blog">Read the blog</a> · <a href="/#contact">Get in touch</a></p>
 </main>`;
 }
+
+function projectBody(p: Project, data: SiteData) {
+  const related = postsMentioningProject(p, data.posts, 3);
+  const i = data.projects.indexOf(p);
+  const prev = data.projects[i - 1];
+  const next = data.projects[i + 1];
+  return `<main class="seo-static">${nav}
+<nav aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/projects">Projects</a> › <span>${e(p.name)}</span></nav>
+<article>
+<h1>${e(p.name)}</h1>
+${p.badge ? `<p><strong>${e(p.badge)}</strong></p>` : ''}
+<p>${e(p.description)}</p>
+${p.gallery.map((g, n) => {
+  const img = galleryImg(p, n, n === 0);
+  return img ? `<figure>${img}${g.caption ? `<figcaption>${e(g.caption)}</figcaption>` : ''}</figure>` : '';
+}).join('\n')}
+${p.features.length ? `<h2>Key Features</h2>\n<ul>${p.features.map((f) => `<li>${e(f)}</li>`).join('')}</ul>` : ''}
+${p.techStack.length ? `<h2>Technology Stack</h2>\n<ul>${p.techStack.map((t) => `<li>${e(t)}</li>`).join('')}</ul>` : ''}
+${projectLinks(p)}
+${p.writeup.trim() ? `<section><h2>About this project</h2>\n${blocksHtml(textToBlocks(p.writeup))}</section>` : ''}
+</article>
+${related.length ? `<section><h2>From the blog</h2><ul>${related.map((r) => `<li><a href="${postPath(r.slug)}">${e(r.title)}</a></li>`).join('')}</ul></section>` : ''}
+<p>${prev ? `<a href="${projectPath(prev.slug)}">← ${e(prev.name)}</a>` : ''}${prev && next ? ' · ' : ''}${next ? `<a href="${projectPath(next.slug)}">${e(next.name)} →</a>` : ''}</p>
+<p><a href="/projects">All projects</a> · <a href="/#contact">Get in touch</a></p>
+</main>`;
+}
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /* ---------- Feeds ---------- */
 
@@ -163,12 +217,14 @@ type SitemapEntry = { loc: string; lastmod?: string };
 const day = (iso?: string) => (iso ? iso.slice(0, 10) : undefined);
 const postLastmod = (p: BlogPost) => day(p.updatedAt) || p.date;
 
-function sitemapEntries({ posts }: SiteData): SitemapEntry[] {
+function sitemapEntries({ posts, projects }: SiteData): SitemapEntry[] {
   const latest = posts.map(postLastmod).sort().at(-1);
+  const latestProject = projects.map((p) => day(p.updatedAt) ?? '').sort().at(-1) || undefined;
   return [
-    { loc: absoluteUrl('/'), lastmod: latest },
+    { loc: absoluteUrl('/'), lastmod: [latest, latestProject].filter(Boolean).sort().at(-1) },
     { loc: absoluteUrl('/blog'), lastmod: latest },
-    { loc: absoluteUrl('/projects') },
+    { loc: absoluteUrl('/projects'), lastmod: latestProject },
+    ...projects.map((p) => ({ loc: absoluteUrl(projectPath(p.slug)), lastmod: day(p.updatedAt) })),
     ...posts.map((p) => ({ loc: absoluteUrl(postPath(p.slug)), lastmod: postLastmod(p) })),
   ];
 }
@@ -269,7 +325,18 @@ async function main() {
     throw new Error('[prerender] index.html is missing the <!--seo-head--> / <!--app-html--> markers.');
   }
 
-  const data = await loadData();
+  const loaded = await loadData();
+  // Projects need a usable, unique slug for their own page (duplicates would overwrite each other).
+  const seen = new Set<string>();
+  const projects = loaded.projects.filter((p) => {
+    if (!SLUG_RE.test(p.slug) || seen.has(p.slug)) {
+      console.warn(`[prerender] Skipping project "${p.name}" — its URL slug "${p.slug}" is empty, unusual or used twice.`);
+      return false;
+    }
+    seen.add(p.slug);
+    return true;
+  });
+  const data: SiteData = { ...loaded, projects };
   const render = (meta: PageMeta, body: string) =>
     template.replace(headRe, () => headHtml(meta)).replace('<!--app-html-->', () => body);
 
@@ -278,8 +345,11 @@ async function main() {
   writeFile('index.html', render(homeMeta(data.settings), homeBody(data)));
   writeFile('blog/index.html', render(blogListMeta(data.posts, data.settings), blogBody(data)));
   writeFile('projects/index.html', render(projectsMeta(data.projects, data.settings), projectsBody(data)));
+  for (const project of data.projects) {
+    writeFile(`projects/${project.slug}/index.html`, render(projectMeta(project, data.settings), projectBody(project, data)));
+  }
   for (const post of data.posts) {
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(post.slug)) {
+    if (!SLUG_RE.test(post.slug)) {
       console.warn(`[prerender] Skipping post with an unusual slug: "${post.slug}"`);
       continue;
     }
@@ -291,7 +361,10 @@ async function main() {
   writeFile('rss.xml', rssXml(data));
   writeFile('robots.txt', robotsTxt());
 
-  console.log(`[prerender] Wrote home, blog, projects, ${data.posts.length} post page(s), sitemap.xml (${entries.length} URLs), rss.xml, robots.txt.`);
+  console.log(
+    `[prerender] Wrote home, blog, projects, ${data.projects.length} project page(s), ${data.posts.length} post page(s), ` +
+    `sitemap.xml (${entries.length} URLs), rss.xml, robots.txt.`,
+  );
 
   if (env.VERCEL_ENV === 'production') await pingIndexNow(entries);
   else console.log('[prerender] Not a production deploy — IndexNow ping skipped.');

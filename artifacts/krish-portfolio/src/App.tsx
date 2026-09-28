@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Download, Facebook, Github, Instagram, Linkedin, Mail, MapPin, Phone, Search, Youtube } from 'lucide-react';
+import { ArrowRight, Download, Facebook, Github, Instagram, Linkedin, Mail, MapPin, Phone, Search, Youtube } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -8,7 +8,10 @@ import NotFound from '@/pages/not-found';
 import BlogPage from '@/pages/blog';
 import BlogPostPage from '@/pages/blog-post';
 import ProjectsPage from '@/pages/projects';
+import ProjectPage from '@/pages/project';
 import { SiteNav } from '@/components/site-nav';
+import { ProjectShowcase } from '@/components/project-showcase';
+import { homeProjects } from '@/data/projects';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
 import { HeroParticles } from '@/components/hero-particles';
@@ -18,7 +21,7 @@ import { toast } from '@/hooks/use-toast';
 import { homeMeta } from '@/seo/meta';
 import { useSeo } from '@/seo/use-seo';
 import AdminApp from '@/admin/admin-app';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
 
@@ -212,6 +215,7 @@ function CustomCursor() {
 function Home() {
   const settings = useSiteSettings();
   const { data: projectList = [] } = useProjects();
+  const shownProjects = homeProjects(projectList);
   const { data: toolList = [], isLoading: toolsLoading } = useTools();
   const { data: statList = [], isLoading: statsLoading } = useStats();
   const [sending, setSending] = useState(false);
@@ -464,23 +468,16 @@ function Home() {
             </div>
             <p className="reveal reveal-delay-2">{projectList.length || 'A few'} projects. Each one a sharper question, a new constraint, and another reason to keep going.</p>
           </div>
-          <div className="project-list" data-testid="list-projects">
-            {projectList.map((project) => (
-              <article className="project-row reveal" data-tilt key={project.number} data-testid={`card-project-${project.number}`}>
-                {project.image && <img className="project-thumb" src={project.image} alt={`${project.name} screenshot`} loading="lazy" decoding="async" />}
-                <div className="project-number">{project.number}</div>
-                <div className="project-name">{project.name}</div>
-                <div className="project-description">{project.description}</div>
-                {project.url ? (
-                  <a className="project-link" href={project.url} target="_blank" rel="noreferrer" data-testid={`link-project-${project.number}`}>
-                    View on GitHub <ArrowUpRight size={14} />
-                  </a>
-                ) : (
-                  <span className="project-link" aria-label="Personal project">Personal project</span>
-                )}
-              </article>
+          <div className="pj-list" data-testid="list-projects">
+            {shownProjects.map((project, i) => (
+              <ProjectShowcase key={project.slug} project={project} flip={i % 2 === 1} reveal />
             ))}
           </div>
+          {shownProjects.length < projectList.length && (
+            <div className="pj-all reveal">
+              <Link href="/projects" className="btn-secondary">See all {projectList.length} projects <ArrowRight size={15} /></Link>
+            </div>
+          )}
         </div>
       </section>
 
@@ -610,6 +607,7 @@ function Router() {
         <Route path="/blog" component={BlogPage} />
         <Route path="/blog/:slug" component={BlogPostPage} />
         <Route path="/projects" component={ProjectsPage} />
+        <Route path="/projects/:slug" component={ProjectPage} />
         <Route path="/admin" nest component={AdminApp} />
         <Route component={NotFound} />
       </Switch>
