@@ -3,8 +3,9 @@ import { ApiError, GoogleGenAI, Type } from '@google/genai';
 
 /*
  * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for the
- * Krish portfolio and insert it into Supabase. Gemini is the main writer; if it's unavailable
- * after retries, Groq is used as a free backup (same prompt, same JSON shape, same validation).
+ * Krish portfolio and insert it into Supabase. Writers are tried in order until one works:
+ * Gemini Flash, then Gemini Flash-Lite (separate capacity pool, so it can succeed when Flash is
+ * overloaded), then Groq as a free backup (same prompt, same JSON shape, same validation).
  * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
  * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY is optional).
  */
@@ -34,13 +35,35 @@ type GeneratedPost = { title: string; excerpt: string; category: Category; block
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// Aliased to Google's current default Flash model, so this never needs a model name bumped by hand.
+// Aliased to Google's current default Flash / Flash-Lite models, so these never need a model
+// name bumped by hand. They're separate capacity pools, so Flash being overloaded doesn't mean
+// Flash-Lite is too.
 const GEMINI_MODEL = 'gemini-flash-latest';
-// GitHub Models (the original free backup) was retired in July 2026, so Groq is the backup instead.
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GEMINI_MODEL_LITE = 'gemini-flash-lite-latest';
 
-// ~20s, 40s, 80s — how long to wait before each retry of a single provider.
-const RETRY_DELAYS_MS = [20_000, 40_000, 80_000];
+// GitHub Models (the original free backup) was retired in July 2026, so Groq is the backup instead.
+// Groq's free-tier catalog changes often (models get deprecated with a few weeks' notice), so the
+// model isn't hardcoded — callGroq() asks Groq which models actually exist right before writing.
+// Ordered largest/best-for-writing first; whichever of these is actually live gets used.
+const GROQ_PREFERRED_MODELS = [
+  'openai/gpt-oss-120b',
+  'moonshotai/kimi-k2-instruct',
+  'qwen/qwen3-32b',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-20b',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'llama-3.1-8b-instant',
+  'gemma2-9b-it',
+];
+// Groq's catalog also lists audio transcription/TTS and moderation models under /models — those
+// can't write a blog post, so never pick one even as a last resort.
+const GROQ_EXCLUDE_RE = /whisper|tts|guard|moderation|audio/i;
+
+// ~15s, 30s — how long to wait before retrying one writer option. Kept short because the run has
+// up to three writer options and, on an invalid response, tries the whole chain a second time —
+// all within the GitHub Actions job's 15-minute timeout.
+const RETRY_DELAYS_MS = [15_000, 30_000];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -223,56 +246,86 @@ async function withRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
   }
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: prompt,
-    config: { responseMimeType: 'application/json', responseSchema },
-  });
-  const text = response.text;
-  if (!text) throw new Error('Gemini returned an empty response.');
-  return text;
+type ProviderResult = { text: string; model: string };
+
+function callGemini(model: string) {
+  return async (prompt: string): Promise<ProviderResult> => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: { responseMimeType: 'application/json', responseSchema },
+    });
+    const text = response.text;
+    if (!text) throw new Error('Gemini returned an empty response.');
+    return { text, model };
+  };
 }
 
-async function callGroq(prompt: string): Promise<string> {
+// Picks the best available Groq chat model: the first of GROQ_PREFERRED_MODELS that's actually
+// live, or (if none of those are) any other non-excluded model Groq currently offers.
+function selectGroqModel(available: string[]): string {
+  const usable = available.filter((id) => !GROQ_EXCLUDE_RE.test(id));
+  const preferred = GROQ_PREFERRED_MODELS.find((id) => usable.includes(id));
+  if (preferred) return preferred;
+  if (usable.length) return usable[0];
+  throw new Error('Groq has no usable chat models available.');
+}
+
+async function callGroq(prompt: string): Promise<ProviderResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
+
+  const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!modelsRes.ok) {
+    const body = await modelsRes.text().catch(() => '');
+    throw new HttpError(modelsRes.status, `Groq models list error ${modelsRes.status}: ${body.slice(0, 300)}`);
+  }
+  const modelsData = (await modelsRes.json()) as { data?: { id: string }[] };
+  const model = selectGroqModel((modelsData.data ?? []).map((m) => m.id));
+  console.log(`[Groq] chosen model: ${model}`);
+
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model,
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
     }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new HttpError(res.status, `Groq API error ${res.status}: ${body.slice(0, 300)}`);
+    // A model that disappeared from the catalog between the list call and here shouldn't be
+    // retried — withRetry would just hit the same 404 again — so this still throws normally and
+    // generateOnce() moves straight on to the next writer option.
+    throw new HttpError(res.status, `Groq API error ${res.status} (model "${model}"): ${body.slice(0, 300)}`);
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error('Groq returned an empty response.');
-  return text;
+  return { text, model };
 }
 
-// One entry per writer. To add another free provider later (e.g. Groq's own alternates, or a
-// new service), just add a `call` function above and one more entry here — nothing else changes.
-const providers: { name: string; call: (prompt: string) => Promise<string> }[] = [
-  { name: 'Gemini', call: callGemini },
-  { name: 'Groq', call: callGroq },
+// One entry per writer option, tried in order. To add another free provider later, just add a
+// `call` function above and one more entry here — nothing else changes.
+const providers: { name: string; label: string; call: (prompt: string) => Promise<ProviderResult> }[] = [
+  { name: 'Gemini', label: `Gemini (${GEMINI_MODEL})`, call: callGemini(GEMINI_MODEL) },
+  { name: 'Gemini', label: `Gemini (${GEMINI_MODEL_LITE})`, call: callGemini(GEMINI_MODEL_LITE) },
+  { name: 'Groq', label: 'Groq', call: callGroq },
 ];
 
 async function generateOnce(prompt: string): Promise<{ data: unknown; writer: string }> {
   const failures: string[] = [];
   for (const provider of providers) {
     try {
-      const text = await withRetry(provider.name, () => provider.call(prompt));
-      return { data: JSON.parse(text) as unknown, writer: provider.name };
+      const { text, model } = await withRetry(provider.label, () => provider.call(prompt));
+      return { data: JSON.parse(text) as unknown, writer: `${provider.name} (${model})` };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      failures.push(`${provider.name}: ${reason}`);
-      console.warn(`${provider.name} could not write the post — trying the next provider…`);
+      failures.push(`${provider.label}: ${reason}`);
+      console.warn(`${provider.label} could not write the post — trying the next option…`);
     }
   }
   throw new Error(`Every provider failed. ${failures.join(' | ')}`);
