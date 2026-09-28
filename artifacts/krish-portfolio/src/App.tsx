@@ -1,6 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, AudioLines, AudioWaveform, Bot, Code2, Download, Facebook, Figma, Github, HeartPulse, Instagram, Linkedin, Mail, MapPin, MessageSquare, Phone, Search, Sparkles, Video, Youtube } from 'lucide-react';
-import { type LucideIcon } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Download, Facebook, Github, Instagram, Linkedin, Mail, MapPin, Phone, Search, Youtube } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -12,33 +11,28 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
 import { HeroParticles } from '@/components/hero-particles';
-import { sendContactMessage, useProjects, useSiteSettings } from '@/data/live';
+import { sendContactMessage, useProjects, useSiteSettings, useStats, useTools } from '@/data/live';
+import { slugifyToolName, toolIconFor, type Tool } from '@/data/skills';
 import { toast } from '@/hooks/use-toast';
 import AdminApp from '@/admin/admin-app';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
 
-const tools: { name: string; id: string; icon: LucideIcon }[] = [
-  { name: 'Claude', id: 'claude', icon: Sparkles },
-  { name: 'GitHub Copilot', id: 'github-copilot', icon: Bot },
-  { name: 'ChatGPT', id: 'chatgpt', icon: MessageSquare },
-  { name: 'VS Code', id: 'vs-code', icon: Code2 },
-  { name: 'GitHub', id: 'github', icon: Github },
-  { name: 'Figma', id: 'figma', icon: Figma },
-  { name: 'ElevenLabs', id: 'elevenlabs', icon: AudioWaveform },
-  { name: 'Deepgram', id: 'deepgram', icon: AudioLines },
-  { name: 'Cartesia AI', id: 'cartesia-ai', icon: HeartPulse },
-  { name: 'LiveKit', id: 'livekit', icon: Video },
-];
+function parseStatValue(raw: string): { num: number; suffix: string } | null {
+  const m = raw.match(/^(\d+(?:\.\d+)?)(.*)$/);
+  return m ? { num: parseFloat(m[1]), suffix: m[2] } : null;
+}
 
-function StatCounter({ value, suffix, label }: { value: number; suffix: string; label: string }) {
+function StatCounter({ value, label }: { value: string; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
+  const parsed = parseStatValue(value);
+  const num = parsed?.num;
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || num === undefined) return;
     let started = false;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -51,7 +45,7 @@ function StatCounter({ value, suffix, label }: { value: number; suffix: string; 
           const tick = (now: number) => {
             const progress = Math.min((now - startTime) / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3);
-            setCount(Math.round(value * eased));
+            setCount(Math.round(num * eased));
             if (progress < 1) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -61,13 +55,30 @@ function StatCounter({ value, suffix, label }: { value: number; suffix: string; 
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [value]);
+  }, [num]);
 
   return (
     <div className="stat" ref={ref} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-      <div className="stat-number">{count}{suffix}</div>
+      <div className="stat-number">{parsed ? `${count}${parsed.suffix}` : value}</div>
       <div className="stat-label">{label}</div>
     </div>
+  );
+}
+
+function ToolTile({ tool }: { tool: Tool }) {
+  const Icon = toolIconFor(tool.name);
+  const [broken, setBroken] = useState(false);
+  const showLogo = tool.logoUrl && !broken;
+  return (
+    <span className={`tool-icon${showLogo ? ' has-logo' : !Icon ? ' is-letter' : ''}`}>
+      {showLogo ? (
+        <img className="tool-logo-img" src={tool.logoUrl} alt="" onError={() => setBroken(true)} />
+      ) : Icon ? (
+        <Icon size={40} strokeWidth={1.5} />
+      ) : (
+        tool.name.charAt(0).toUpperCase()
+      )}
+    </span>
   );
 }
 
@@ -198,6 +209,8 @@ function CustomCursor() {
 function Home() {
   const settings = useSiteSettings();
   const { data: projectList = [] } = useProjects();
+  const { data: toolList = [], isLoading: toolsLoading } = useTools();
+  const { data: statList = [], isLoading: statsLoading } = useStats();
   const [sending, setSending] = useState(false);
 
   // Arriving from another page with a #hash (e.g. /#contact from the blog): scroll to it once mounted.
@@ -224,7 +237,7 @@ function Home() {
     );
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [projectList]);
+  }, [projectList, toolList, statList]);
 
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll<HTMLElement>('.tl-in, .mpill-in, .hline-in, .vcta-in, .fline-in, .fbtn-in, .fin-in'));
@@ -403,22 +416,24 @@ function Home() {
           <div className="section-label reveal">03 / The toolkit</div>
           <h2 className="skills-heading reveal reveal-delay-1">My Capabilities</h2>
           <div className="tools-grid" data-testid="list-skills">
-            {tools.map((tool, i) => (
-              <div
-                className="tool-item reveal"
-                key={tool.name}
-                style={{ transitionDelay: `${0.25 + i * 0.05}s` }}
-                data-testid={`tool-${tool.id}`}
-              >
-                <span className="tool-icon"><tool.icon size={40} strokeWidth={1.5} /></span>
-                <span className="tool-name">{tool.name}</span>
-              </div>
-            ))}
+            {toolsLoading && !toolList.length
+              ? Array.from({ length: 10 }, (_, i) => <span key={i} className="tool-skel" aria-hidden="true" />)
+              : toolList.map((tool, i) => (
+                <div
+                  className="tool-item reveal"
+                  key={tool.id}
+                  style={{ transitionDelay: `${0.25 + i * 0.05}s` }}
+                  data-testid={`tool-${slugifyToolName(tool.name)}`}
+                >
+                  <ToolTile tool={tool} />
+                  <span className="tool-name">{tool.name}</span>
+                </div>
+              ))}
           </div>
           <div className="stats-row reveal reveal-delay-3">
-            <StatCounter value={500} suffix="+" label="Development Hours" />
-            <StatCounter value={5} suffix="+" label="Projects Built" />
-            <StatCounter value={3} suffix="+" label="Languages Known" />
+            {statsLoading && !statList.length
+              ? Array.from({ length: 3 }, (_, i) => <span key={i} className="stat-skel" aria-hidden="true" />)
+              : statList.map((stat) => <StatCounter key={stat.id} value={stat.value} label={stat.label} />)}
           </div>
           <div className="marketing-subsection">
             <h3 className="marketing-heading reveal reveal-delay-1">

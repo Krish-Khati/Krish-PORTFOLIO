@@ -12,6 +12,27 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-28 (2) — Admin: editable Skills section, real tool logos
+
+**"My Capabilities" is now fully editable from the admin panel**
+- New database tables `tools` (name, logo_url, sort_order) and `stats` (value, label, sort_order), public read / authenticated-only write, seeded with the current 10 tools and 3 stats. One file: `supabase/add-tools-and-stats.sql` (safe to re-run — seeds only when the tables are empty). **Owner action needed:** run it once in the Supabase SQL editor.
+- Tool logos upload into the existing "covers" storage bucket under a `tools/` folder — no new bucket needed.
+- `src/admin/api.ts`: `uploadImage()` gained optional `folder`/`maxMB` params; added full CRUD (list/save/move/delete) for tools and stats, demo-mode and Supabase-mode, matching the Projects page's pattern exactly.
+- `src/admin/ui.tsx`: pulled the cover-style image dropzone out into a shared `ImagePicker` component (used by both the Images page and the new Skills page).
+
+**New: Skills page (`/admin/skills`)**
+- Tools: grid of cards with a logo dropzone (click/drag, PNG/SVG/WebP/JPG up to 2 MB) and an editable name, move up/down, delete with confirm, add via a modal.
+- Stats: editable value + label rows, move up/down, delete with confirm, add inline.
+- Success/error toasts throughout, using the real Supabase error message on failure.
+
+**Public site**
+- `src/data/skills.ts` (new): static fallback tools/stats + a name → line-icon lookup (kept for tools without an uploaded logo).
+- `src/data/live.ts`: `useTools()` / `useStats()` load from Supabase in `sort_order`, falling back to the static list on any error (including the tables not existing yet) so the section is never empty.
+- `src/App.tsx`: tools render their uploaded logo (48px, contain, on a subtle dark tile so dark logos like GitHub's stay visible), or the existing line icon, or a green initial circle as a last resort; stats keep their count-up animation, now driven by the database. Both show a simple pulsing placeholder while loading.
+
+**Verification**
+- `pnpm --filter @workspace/krish-portfolio run typecheck` ✅ and production `vite build` ✅.
+
 ### 2026-09-28 — Admin: session expiry, change password, Images page
 
 **Admin login no longer stays signed in forever**

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, ImagePlus, Loader2, X } from 'lucide-react';
+import { uploadImage } from './api';
 
 export function Modal({
   open,
@@ -130,6 +131,81 @@ export function CountUp({ value }: { value: number }) {
     return () => cancelAnimationFrame(raf);
   }, [value]);
   return <>{n}</>;
+}
+
+// Shared image upload/preview control — used by the Images page (hero/about/project photos)
+// and the Skills page (tool logos). Uploads through uploadImage() in api.ts.
+export function ImagePicker({
+  value,
+  onChange,
+  aspect,
+  folder,
+  maxMB,
+  busy,
+  small,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  aspect: string;
+  folder?: string;
+  maxMB?: number;
+  busy?: boolean;
+  small?: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => setBroken(false), [value]);
+
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setErr('');
+    setUploading(true);
+    try {
+      onChange(await uploadImage(file, folder, maxMB));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const working = uploading || busy;
+
+  return (
+    <div className={small ? 'adm-images-picker-small' : undefined}>
+      <div
+        className={`adm-cover-drop${value && !broken ? ' has-image' : ''}`}
+        style={{ aspectRatio: aspect }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files[0]); }}
+      >
+        {value && !broken ? (
+          <>
+            <img src={value} alt="" onError={() => setBroken(true)} />
+            <button type="button" className="adm-cover-remove" onClick={() => onChange('')} aria-label="Remove image">
+              <X size={15} />
+            </button>
+          </>
+        ) : (
+          <button type="button" className="adm-cover-empty" onClick={() => fileRef.current?.click()} disabled={working}>
+            {working ? <Loader2 size={small ? 16 : 22} className="adm-spin" /> : <ImagePlus size={small ? 16 : 22} />}
+            {!small && <span>{working ? 'Uploading…' : broken ? "Image couldn't load — pick another" : 'Click or drop an image'}</span>}
+          </button>
+        )}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+      {value && !broken && !small && (
+        <button type="button" className="adm-btn adm-btn-ghost adm-cover-replace" onClick={() => fileRef.current?.click()} disabled={working}>
+          {working ? <Loader2 size={15} className="adm-spin" /> : <ImagePlus size={15} />} {working ? 'Uploading…' : 'Replace image'}
+        </button>
+      )}
+      {err && <p className="adm-form-error" role="alert">{err}</p>}
+    </div>
+  );
 }
 
 export function relativeTime(iso: string) {

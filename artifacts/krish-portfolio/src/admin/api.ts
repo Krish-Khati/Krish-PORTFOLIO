@@ -1,5 +1,6 @@
 import { blogPosts, type BlogPost } from '@/data/blog';
 import { projects as seedProjects } from '@/data/projects';
+import { tools as seedTools, stats as seedStats } from '@/data/skills';
 import { supabase } from '@/lib/supabase';
 
 /*
@@ -16,6 +17,8 @@ export const postCategories: PostCategory[] = ['Journey', 'Learning', 'Projects'
 
 export type AdminPost = BlogPost & { id: string; status: PostStatus; updatedAt: string };
 export type AdminProject = { id: string; name: string; description: string; url: string; image: string; position: number };
+export type AdminTool = { id: string; name: string; logoUrl: string; position: number };
+export type AdminStat = { id: string; value: string; label: string; position: number };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
 export type SiteSettings = {
   name: string;
@@ -32,7 +35,10 @@ export type SiteSettings = {
   aboutPhoto: string;
 };
 
-type Db = { posts: AdminPost[]; projects: AdminProject[]; messages: AdminMessage[]; settings: SiteSettings };
+type Db = {
+  posts: AdminPost[]; projects: AdminProject[]; tools: AdminTool[]; stats: AdminStat[];
+  messages: AdminMessage[]; settings: SiteSettings;
+};
 
 const KEY = 'krish-admin-demo-v1';
 
@@ -53,6 +59,8 @@ function seed(): Db {
   return {
     posts: blogPosts.map((p) => ({ ...p, id: uid(), status: 'published', updatedAt: `${p.date}T10:00:00.000Z` })),
     projects: seedProjects.map((p, i) => ({ id: uid(), name: p.name, description: p.description, url: p.url, image: p.image ?? '', position: i })),
+    tools: seedTools.map((t, i) => ({ id: uid(), name: t.name, logoUrl: t.logoUrl, position: i })),
+    stats: seedStats.map((s, i) => ({ id: uid(), value: s.value, label: s.label, position: i })),
     messages: [
       { id: uid(), name: 'Sample: Riya Sharma', email: 'riya@example.com', message: 'Hi Krish! Loved the Memory Match game. Are you open to a short frontend internship this winter?', createdAt: daysAgo(0, 9), read: false },
       { id: uid(), name: 'Sample: Aman Verma', email: 'aman@example.com', message: 'Your portfolio animations are really clean. Could you help set up a simple landing page for my coaching centre?', createdAt: daysAgo(1, 16), read: false },
@@ -168,6 +176,74 @@ function demo_deleteProject(id: string) {
   return delay(true);
 }
 
+/* ---------- Tools ---------- */
+
+function demo_listTools() {
+  return delay([...db().tools].sort((a, b) => a.position - b.position));
+}
+
+function demo_saveTool(input: Omit<AdminTool, 'id' | 'position'> & { id?: string }) {
+  const list = db().tools;
+  const existing = input.id ? list.find((t) => t.id === input.id) : undefined;
+  if (existing) Object.assign(existing, input);
+  else list.push({ ...input, id: uid(), position: list.length ? Math.max(...list.map((t) => t.position)) + 1 : 0 });
+  commit();
+  return delay(true);
+}
+
+function demo_moveTool(id: string, direction: -1 | 1) {
+  const list = [...db().tools].sort((a, b) => a.position - b.position);
+  const i = list.findIndex((t) => t.id === id);
+  const j = i + direction;
+  if (i >= 0 && j >= 0 && j < list.length) {
+    const a = list[i].position;
+    list[i].position = list[j].position;
+    list[j].position = a;
+    commit();
+  }
+  return delay(true, 60);
+}
+
+function demo_deleteTool(id: string) {
+  db().tools = db().tools.filter((t) => t.id !== id);
+  commit();
+  return delay(true);
+}
+
+/* ---------- Stats ---------- */
+
+function demo_listStats() {
+  return delay([...db().stats].sort((a, b) => a.position - b.position));
+}
+
+function demo_saveStat(input: Omit<AdminStat, 'id' | 'position'> & { id?: string }) {
+  const list = db().stats;
+  const existing = input.id ? list.find((s) => s.id === input.id) : undefined;
+  if (existing) Object.assign(existing, input);
+  else list.push({ ...input, id: uid(), position: list.length ? Math.max(...list.map((s) => s.position)) + 1 : 0 });
+  commit();
+  return delay(true);
+}
+
+function demo_moveStat(id: string, direction: -1 | 1) {
+  const list = [...db().stats].sort((a, b) => a.position - b.position);
+  const i = list.findIndex((s) => s.id === id);
+  const j = i + direction;
+  if (i >= 0 && j >= 0 && j < list.length) {
+    const a = list[i].position;
+    list[i].position = list[j].position;
+    list[j].position = a;
+    commit();
+  }
+  return delay(true, 60);
+}
+
+function demo_deleteStat(id: string) {
+  db().stats = db().stats.filter((s) => s.id !== id);
+  commit();
+  return delay(true);
+}
+
 /* ---------- Messages ---------- */
 
 function demo_listMessages() {
@@ -215,6 +291,8 @@ type PostRow = {
   date: string; status: PostStatus; blocks: AdminPost['blocks']; updated_at: string; cover?: string | null;
 };
 type MessageRow = { id: string; name: string; email: string; message: string; created_at: string; read: boolean };
+type ToolRow = { id: string; name: string; logo_url: string; sort_order: number };
+type StatRow = { id: string; value: string; label: string; sort_order: number };
 
 const toPost = (r: PostRow): AdminPost => ({
   id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt, category: r.category,
@@ -223,9 +301,22 @@ const toPost = (r: PostRow): AdminPost => ({
 const toMessage = (r: MessageRow): AdminMessage => ({
   id: r.id, name: r.name, email: r.email, message: r.message, createdAt: r.created_at, read: r.read,
 });
+const toTool = (r: ToolRow): AdminTool => ({ id: r.id, name: r.name, logoUrl: r.logo_url ?? '', position: r.sort_order });
+const toStat = (r: StatRow): AdminStat => ({ id: r.id, value: r.value, label: r.label, position: r.sort_order });
 
 function check<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
+  return res.data;
+}
+
+// "tools"/"stats" ship in add-tools-and-stats.sql, which older Supabase projects haven't run yet.
+function checkSkillsTable<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
+  if (res.error) {
+    if (res.error.code === '42P01' || /relation .* does not exist/i.test(res.error.message)) {
+      throw new Error('Skills data isn’t set up in the database yet. Run supabase/add-tools-and-stats.sql in the Supabase SQL editor.');
+    }
+    throw new Error(res.error.message);
+  }
   return res.data;
 }
 
@@ -296,6 +387,74 @@ const remote = {
     check(await sb().from('projects').delete().eq('id', id));
     return true;
   },
+  async listTools() {
+    const rows = checkSkillsTable(await sb().from('tools').select('*').order('sort_order'));
+    return (rows as ToolRow[]).map(toTool);
+  },
+  async saveTool(input: Omit<AdminTool, 'id' | 'position'> & { id?: string }) {
+    const { id, name, logoUrl } = input;
+    const payload = { name, logo_url: logoUrl };
+    if (id) {
+      checkSkillsTable(await sb().from('tools').update(payload).eq('id', id));
+    } else {
+      const last = checkSkillsTable(await sb().from('tools').select('sort_order').order('sort_order', { ascending: false }).limit(1));
+      const top = (last ?? []) as { sort_order: number }[];
+      const sort_order = top.length ? top[0].sort_order + 1 : 0;
+      checkSkillsTable(await sb().from('tools').insert({ ...payload, sort_order }));
+    }
+    return true;
+  },
+  async moveTool(id: string, direction: -1 | 1) {
+    const list = await remote.listTools();
+    const i = list.findIndex((t) => t.id === id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= list.length) return true;
+    const [a, b] = await Promise.all([
+      sb().from('tools').update({ sort_order: list[j].position }).eq('id', list[i].id),
+      sb().from('tools').update({ sort_order: list[i].position }).eq('id', list[j].id),
+    ]);
+    checkSkillsTable(a);
+    checkSkillsTable(b);
+    return true;
+  },
+  async deleteTool(id: string) {
+    checkSkillsTable(await sb().from('tools').delete().eq('id', id));
+    return true;
+  },
+  async listStats() {
+    const rows = checkSkillsTable(await sb().from('stats').select('*').order('sort_order'));
+    return (rows as StatRow[]).map(toStat);
+  },
+  async saveStat(input: Omit<AdminStat, 'id' | 'position'> & { id?: string }) {
+    const { id, value, label } = input;
+    const payload = { value, label };
+    if (id) {
+      checkSkillsTable(await sb().from('stats').update(payload).eq('id', id));
+    } else {
+      const last = checkSkillsTable(await sb().from('stats').select('sort_order').order('sort_order', { ascending: false }).limit(1));
+      const top = (last ?? []) as { sort_order: number }[];
+      const sort_order = top.length ? top[0].sort_order + 1 : 0;
+      checkSkillsTable(await sb().from('stats').insert({ ...payload, sort_order }));
+    }
+    return true;
+  },
+  async moveStat(id: string, direction: -1 | 1) {
+    const list = await remote.listStats();
+    const i = list.findIndex((s) => s.id === id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= list.length) return true;
+    const [a, b] = await Promise.all([
+      sb().from('stats').update({ sort_order: list[j].position }).eq('id', list[i].id),
+      sb().from('stats').update({ sort_order: list[i].position }).eq('id', list[j].id),
+    ]);
+    checkSkillsTable(a);
+    checkSkillsTable(b);
+    return true;
+  },
+  async deleteStat(id: string) {
+    checkSkillsTable(await sb().from('stats').delete().eq('id', id));
+    return true;
+  },
   async listMessages() {
     const rows = check(await sb().from('messages').select('*').order('created_at', { ascending: false }));
     return (rows as MessageRow[]).map(toMessage);
@@ -336,15 +495,17 @@ function readAsDataUrl(file: File) {
 }
 
 // Uploads an image and returns the public URL to store wherever it's used (post cover,
-// hero/about photo, project image).
-export async function uploadImage(file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file (JPG, PNG, WebP or GIF).');
-  const limit = supabase ? MAX_COVER_MB : MAX_DEMO_COVER_MB;
+// hero/about photo, project image, tool logo). `folder` groups uploads under a prefix
+// (e.g. "tools") within the same bucket — purely organizational, no extra setup needed.
+// `maxMB` overrides the default size cap (ignored in demo mode, which stays tiny for localStorage).
+export async function uploadImage(file: File, folder = '', maxMB?: number): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file (JPG, PNG, WebP, SVG or GIF).');
+  const limit = supabase ? (maxMB ?? MAX_COVER_MB) : MAX_DEMO_COVER_MB;
   if (file.size > limit * 1024 * 1024) throw new Error(`That image is over ${limit} MB. Please use a smaller one.`);
   if (!supabase) return readAsDataUrl(file);
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const path = `${uid()}.${ext}`;
+  const path = `${folder ? `${folder}/` : ''}${uid()}.${ext}`;
   const { error } = await sb().storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: '31536000' });
   if (error) {
     if (/bucket/i.test(error.message)) {
@@ -369,6 +530,18 @@ export const saveProject = (input: Omit<AdminProject, 'id' | 'position'> & { id?
 export const moveProject = (id: string, direction: -1 | 1) =>
   supabase ? remote.moveProject(id, direction) : demo_moveProject(id, direction);
 export const deleteProject = (id: string) => (supabase ? remote.deleteProject(id) : demo_deleteProject(id));
+export const listTools = () => (supabase ? remote.listTools() : demo_listTools());
+export const saveTool = (input: Omit<AdminTool, 'id' | 'position'> & { id?: string }) =>
+  supabase ? remote.saveTool(input) : demo_saveTool(input);
+export const moveTool = (id: string, direction: -1 | 1) =>
+  supabase ? remote.moveTool(id, direction) : demo_moveTool(id, direction);
+export const deleteTool = (id: string) => (supabase ? remote.deleteTool(id) : demo_deleteTool(id));
+export const listStats = () => (supabase ? remote.listStats() : demo_listStats());
+export const saveStat = (input: Omit<AdminStat, 'id' | 'position'> & { id?: string }) =>
+  supabase ? remote.saveStat(input) : demo_saveStat(input);
+export const moveStat = (id: string, direction: -1 | 1) =>
+  supabase ? remote.moveStat(id, direction) : demo_moveStat(id, direction);
+export const deleteStat = (id: string) => (supabase ? remote.deleteStat(id) : demo_deleteStat(id));
 export const listMessages = () => (supabase ? remote.listMessages() : demo_listMessages());
 export const setMessageRead = (id: string, read: boolean) =>
   supabase ? remote.setMessageRead(id, read) : demo_setMessageRead(id, read);

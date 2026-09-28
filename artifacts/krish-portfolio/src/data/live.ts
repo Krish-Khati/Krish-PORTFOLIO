@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { blogPosts, type BlogPost, withCover } from './blog';
 import { projects as staticProjects, type Project } from './projects';
+import { stats as staticStats, type Stat, tools as staticTools, type Tool } from './skills';
 
 /*
  * Public-site data. With Supabase configured, content comes from the database (what the admin
@@ -75,6 +76,46 @@ export function useProjects() {
       }));
     },
     initialData: supabase ? undefined : staticProjects,
+    staleTime: 60_000,
+  });
+}
+
+// Tools/stats fall back to the static list on ANY failure (including the "tools"/"stats"
+// tables not existing yet) so the "My Capabilities" section is never empty.
+export function useTools() {
+  return useQuery({
+    queryKey: ['public', 'tools'],
+    queryFn: async (): Promise<Tool[]> => {
+      if (!supabase) return staticTools;
+      try {
+        const { data, error } = await supabase.from('tools').select('id, name, logo_url').order('sort_order');
+        if (error) throw error;
+        const rows = data as { id: string; name: string; logo_url: string }[];
+        return rows.length ? rows.map((r) => ({ id: r.id, name: r.name, logoUrl: r.logo_url ?? '' })) : staticTools;
+      } catch {
+        return staticTools;
+      }
+    },
+    initialData: supabase ? undefined : staticTools,
+    staleTime: 60_000,
+  });
+}
+
+export function useStats() {
+  return useQuery({
+    queryKey: ['public', 'stats'],
+    queryFn: async (): Promise<Stat[]> => {
+      if (!supabase) return staticStats;
+      try {
+        const { data, error } = await supabase.from('stats').select('id, value, label').order('sort_order');
+        if (error) throw error;
+        const rows = data as { id: string; value: string; label: string }[];
+        return rows.length ? rows : staticStats;
+      } catch {
+        return staticStats;
+      }
+    },
+    initialData: supabase ? undefined : staticStats,
     staleTime: 60_000,
   });
 }

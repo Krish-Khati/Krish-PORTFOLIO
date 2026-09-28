@@ -538,3 +538,30 @@ html.admin-mode body::before { display: none; }
 .adm-images-picker-small { width: 88px; }
 .adm-images-picker-small .adm-cover-drop { border-radius: 10px; }
 .adm-images-picker-small .adm-cover-remove { width: 22px; height: 22px; top: 4px; right: 4px; }
+
+/* Skills page */
+.adm-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.adm-section-head .adm-section-title { margin-bottom: 4px; }
+.adm-tool-card { width: 96px; }
+.adm-tool-name-input {
+  width: 100%; background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 3px 4px; color: var(--a-text); font: 500 12.5px 'Inter', sans-serif; text-align: center;
+  transition: border-color .2s ease, background .2s ease;
+}
+.adm-tool-name-input:hover, .adm-tool-name-input:focus { border-color: var(--a-line); background: rgba(255, 255, 255, .04); outline: none; }
+.adm-tool-card .adm-row-actions { justify-content: center; }
+.adm-stat-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.adm-stat-row, .adm-stat-add {
+  display: grid; grid-template-columns: 1fr 2fr auto; gap: 10px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--a-line); border-radius: 10px; background: rgba(255, 255, 255, .02);
+}
+.adm-stat-add { margin-top: 14px; border-style: dashed; }
+.adm-stat-row input, .adm-stat-add input {
+  width: 100%; background: transparent; border: 1px solid var(--a-line); border-radius: 8px;
+  padding: 8px 10px; color: var(--a-text); font: 500 14px 'Inter', sans-serif;
+}
+.adm-stat-row input:focus, .adm-stat-add input:focus { outline: none; border-color: var(--a-accent); }
+@media (max-width: 560px) {
+  .adm-stat-row, .adm-stat-add { grid-template-columns: 1fr; }
+  .adm-stat-row .adm-row-actions, .adm-stat-add button { justify-self: end; }
+}
