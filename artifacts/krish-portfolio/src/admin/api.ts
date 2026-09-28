@@ -15,7 +15,7 @@ export type PostCategory = BlogPost['category'];
 export const postCategories: PostCategory[] = ['Journey', 'Learning', 'Projects', 'AI', 'Marketing'];
 
 export type AdminPost = BlogPost & { id: string; status: PostStatus; updatedAt: string };
-export type AdminProject = { id: string; name: string; description: string; url: string; position: number };
+export type AdminProject = { id: string; name: string; description: string; url: string; image: string; position: number };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
 export type SiteSettings = {
   name: string;
@@ -28,6 +28,8 @@ export type SiteSettings = {
   linkedin: string;
   youtube: string;
   github: string;
+  heroImage: string;
+  aboutPhoto: string;
 };
 
 type Db = { posts: AdminPost[]; projects: AdminProject[]; messages: AdminMessage[]; settings: SiteSettings };
@@ -50,7 +52,7 @@ function seed(): Db {
   };
   return {
     posts: blogPosts.map((p) => ({ ...p, id: uid(), status: 'published', updatedAt: `${p.date}T10:00:00.000Z` })),
-    projects: seedProjects.map((p, i) => ({ id: uid(), name: p.name, description: p.description, url: p.url, position: i })),
+    projects: seedProjects.map((p, i) => ({ id: uid(), name: p.name, description: p.description, url: p.url, image: p.image ?? '', position: i })),
     messages: [
       { id: uid(), name: 'Sample: Riya Sharma', email: 'riya@example.com', message: 'Hi Krish! Loved the Memory Match game. Are you open to a short frontend internship this winter?', createdAt: daysAgo(0, 9), read: false },
       { id: uid(), name: 'Sample: Aman Verma', email: 'aman@example.com', message: 'Your portfolio animations are really clean. Could you help set up a simple landing page for my coaching centre?', createdAt: daysAgo(1, 16), read: false },
@@ -67,6 +69,8 @@ function seed(): Db {
       linkedin: 'https://www.linkedin.com',
       youtube: 'https://youtube.com',
       github: 'https://github.com/KRRISH972',
+      heroImage: '',
+      aboutPhoto: '',
     },
   };
 }
@@ -258,12 +262,20 @@ const remote = {
   async saveProject(input: Omit<AdminProject, 'id' | 'position'> & { id?: string }) {
     const { id, ...rest } = input;
     if (id) {
-      check(await sb().from('projects').update(rest).eq('id', id));
+      const res = await sb().from('projects').update(rest).eq('id', id);
+      if (res.error && /image/.test(res.error.message)) {
+        throw new Error('Project images are not set up in the database yet. Run supabase/add-project-images.sql in the Supabase SQL editor.');
+      }
+      check(res);
     } else {
       const last = check(await sb().from('projects').select('position').order('position', { ascending: false }).limit(1));
       const top = (last ?? []) as { position: number }[];
       const position = top.length ? top[0].position + 1 : 0;
-      check(await sb().from('projects').insert({ ...rest, position }));
+      const res = await sb().from('projects').insert({ ...rest, position });
+      if (res.error && /image/.test(res.error.message)) {
+        throw new Error('Project images are not set up in the database yet. Run supabase/add-project-images.sql in the Supabase SQL editor.');
+      }
+      check(res);
     }
     return true;
   },
@@ -306,11 +318,13 @@ const remote = {
   },
 };
 
-/* ================= Cover images ================= */
+/* ================= Images (post covers, hero/about photos, project images) ================= */
 
+// Every image the admin uploads (post covers, the hero background, the about photo, project
+// thumbnails) lands in this same public bucket — set up once in supabase/add-post-covers.sql.
 const COVER_BUCKET = 'covers';
 const MAX_COVER_MB = 5;
-const MAX_DEMO_COVER_MB = 1; // demo mode keeps covers in localStorage, which is small
+const MAX_DEMO_COVER_MB = 1; // demo mode keeps images in localStorage, which is small
 
 function readAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -321,8 +335,9 @@ function readAsDataUrl(file: File) {
   });
 }
 
-// Uploads an image and returns the URL to store as the post's cover.
-export async function uploadCover(file: File): Promise<string> {
+// Uploads an image and returns the public URL to store wherever it's used (post cover,
+// hero/about photo, project image).
+export async function uploadImage(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new Error('Please choose an image file (JPG, PNG, WebP or GIF).');
   const limit = supabase ? MAX_COVER_MB : MAX_DEMO_COVER_MB;
   if (file.size > limit * 1024 * 1024) throw new Error(`That image is over ${limit} MB. Please use a smaller one.`);
@@ -333,12 +348,14 @@ export async function uploadCover(file: File): Promise<string> {
   const { error } = await sb().storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: '31536000' });
   if (error) {
     if (/bucket/i.test(error.message)) {
-      throw new Error('Cover uploads are not set up yet. Run supabase/add-post-covers.sql in the Supabase SQL editor.');
+      throw new Error('Image uploads are not set up yet. Run supabase/add-post-covers.sql in the Supabase SQL editor.');
     }
     throw new Error(error.message);
   }
   return sb().storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
 }
+
+export const uploadCover = uploadImage;
 
 /* ================= Public API ================= */
 

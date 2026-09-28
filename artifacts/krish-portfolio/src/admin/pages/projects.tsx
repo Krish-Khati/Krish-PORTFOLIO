@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { type AdminProject, deleteProject, listProjects, moveProject, saveProject } from '../api';
 import { ConfirmDialog, EmptyState, Modal, PageHeader, Skeleton } from '../ui';
 
-type Form = { id?: string; name: string; description: string; url: string };
+type Form = { id?: string; name: string; description: string; url: string; image: string };
 
 export default function ProjectsPage() {
   const qc = useQueryClient();
@@ -56,7 +56,7 @@ export default function ProjectsPage() {
         title="Projects"
         subtitle="The projects listed in the “Things built to learn” section, in display order."
         actions={
-          <button type="button" className="adm-btn adm-btn-primary" onClick={() => open({ name: '', description: '', url: '' })}>
+          <button type="button" className="adm-btn adm-btn-primary" onClick={() => open({ name: '', description: '', url: '', image: '' })}>
             <Plus size={16} /> Add project
           </button>
         }
@@ -88,7 +88,7 @@ export default function ProjectsPage() {
                   </a>
                 ) : <span className="adm-muted adm-small">Personal project</span>}
                 <div className="adm-row-actions">
-                  <button type="button" className="adm-icon-btn" onClick={() => open({ id: p.id, name: p.name, description: p.description, url: p.url })} aria-label={`Edit ${p.name}`}>
+                  <button type="button" className="adm-icon-btn" onClick={() => open({ id: p.id, name: p.name, description: p.description, url: p.url, image: p.image })} aria-label={`Edit ${p.name}`}>
                     <Pencil size={16} />
                   </button>
                   <button type="button" className="adm-icon-btn adm-icon-danger" onClick={() => setToDelete(p)} aria-label={`Delete ${p.name}`}>

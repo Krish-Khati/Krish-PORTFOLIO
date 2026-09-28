@@ -286,15 +286,19 @@ function Home() {
       <SiteNav />
 
       <section className="hero" id="top" aria-label="Krish introduction">
-        <video
-          className="hero-video"
-          src="/krish-hero.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-hidden="true"
-        />
+        {settings.heroImage ? (
+          <img className="hero-video" src={settings.heroImage} alt="" aria-hidden="true" />
+        ) : (
+          <video
+            className="hero-video"
+            src="/krish-hero.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-hidden="true"
+          />
+        )}
         <div className="hero-overlay" aria-hidden="true" />
         <HeroParticles />
         <div className="hero-content">
@@ -358,7 +362,11 @@ function Home() {
               <span className="about-dot about-dot-1 about-in" style={{ transitionDelay: '0.45s' }} aria-hidden="true" />
               <span className="about-dot about-dot-2 about-in" style={{ transitionDelay: '0.55s' }} aria-hidden="true" />
               <span className="about-dot about-dot-3 about-in" style={{ transitionDelay: '0.65s' }} aria-hidden="true" />
-              <span>Professional photo placeholder</span>
+              {settings.aboutPhoto ? (
+                <img className="about-photo-img" src={settings.aboutPhoto} alt="Krish" />
+              ) : (
+                <span>Professional photo placeholder</span>
+              )}
             </div>
           </div>
         </div>
@@ -439,6 +447,7 @@ function Home() {
           <div className="project-list" data-testid="list-projects">
             {projectList.map((project) => (
               <article className="project-row reveal" data-tilt key={project.number} data-testid={`card-project-${project.number}`}>
+                {project.image && <img className="project-thumb" src={project.image} alt="" aria-hidden="true" />}
                 <div className="project-number">{project.number}</div>
                 <div className="project-name">{project.name}</div>
                 <div className="project-description">{project.description}</div>

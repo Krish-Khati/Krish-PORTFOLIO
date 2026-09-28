@@ -6,4 +6,6 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 // null = not configured → the site uses its static data and the admin runs in demo mode.
-export const supabase = url && anonKey ? createClient(url, anonKey) : null;
+// persistSession: false — the admin session lives only in memory, so closing the tab/browser
+// (or reloading the page) signs the admin out and asks for email + password again next time.
+export const supabase = url && anonKey ? createClient(url, anonKey, { auth: { persistSession: false } }) : null;

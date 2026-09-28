@@ -19,6 +19,8 @@ export type PublicSettings = {
   linkedin: string;
   youtube: string;
   github: string;
+  heroImage: string;
+  aboutPhoto: string;
 };
 
 export const defaultPublicSettings: PublicSettings = {
@@ -32,6 +34,8 @@ export const defaultPublicSettings: PublicSettings = {
   linkedin: 'https://www.linkedin.com',
   youtube: 'https://youtube.com',
   github: 'https://github.com/KRRISH972',
+  heroImage: '',
+  aboutPhoto: '',
 };
 
 const staticPosts = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date)).map(withCover);
@@ -59,9 +63,16 @@ export function useProjects() {
     queryKey: ['public', 'projects'],
     queryFn: async (): Promise<Project[]> => {
       if (!supabase) return staticProjects;
-      const { data, error } = await supabase.from('projects').select('name, description, url').order('position');
+      // '*' so this keeps working whether or not the optional image column exists yet
+      const { data, error } = await supabase.from('projects').select('*').order('position');
       if (error) throw error;
-      return (data as Omit<Project, 'number'>[]).map((p, i) => ({ ...p, number: String(i + 1).padStart(2, '0') }));
+      return (data as (Omit<Project, 'number'> & { position: number })[]).map((p, i) => ({
+        number: String(i + 1).padStart(2, '0'),
+        name: p.name,
+        description: p.description,
+        url: p.url,
+        image: p.image ?? '',
+      }));
     },
     initialData: supabase ? undefined : staticProjects,
     staleTime: 60_000,

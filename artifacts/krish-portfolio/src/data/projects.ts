@@ -1,4 +1,4 @@
-export type Project = { number: string; name: string; description: string; url: string };
+export type Project = { number: string; name: string; description: string; url: string; image?: string };
 
 export const projects: Project[] = [
   {

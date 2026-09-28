@@ -19,6 +19,7 @@ create table if not exists projects (
   name text not null,
   description text not null default '',
   url text not null default '',
+  image text not null default '', -- project thumbnail URL (see add-post-covers.sql for the storage bucket)
   position int not null default 0
 );
 
@@ -60,3 +61,5 @@ create policy "admin manages settings" on site_settings for all to authenticated
 -- Supabase Auth settings so only the admin account exists.
 
 -- Cover image storage: run add-post-covers.sql as well.
+-- Existing project table without the image column: run add-project-images.sql.
+-- heroImage / aboutPhoto settings need no migration — they're just new keys in site_settings.data.

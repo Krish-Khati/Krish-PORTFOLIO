@@ -13,6 +13,7 @@ type AuthValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 };
 
 const KEY = 'krish-admin-session';
@@ -74,7 +75,14 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
-  return <AuthContext.Provider value={{ session, loading, signIn, signOut }}>{children}</AuthContext.Provider>;
+  const updatePassword = useCallback(async (newPassword: string) => {
+    if (newPassword.length < 6) throw new Error('Password must be at least 6 characters.');
+    if (!supabase) throw new Error('Connect Supabase first — the demo login has no real password to change.');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  return <AuthContext.Provider value={{ session, loading, signIn, signOut, updatePassword }}>{children}</AuthContext.Provider>;
 }
 
 export function useAdminAuth() {

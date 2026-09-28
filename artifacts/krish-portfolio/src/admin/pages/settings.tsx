@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Plus, RotateCcw, Save, X } from 'lucide-react';
+import { Database, Eye, EyeOff, KeyRound, Plus, RotateCcw, Save, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useAdminAuth } from '../auth';
 import { getSettings, isSupabaseConnected, resetDemoData, saveSettings, type SiteSettings } from '../api';
 import { ConfirmDialog, PageHeader, Skeleton } from '../ui';
 
@@ -116,6 +117,8 @@ export default function SettingsPage() {
         </section>
       </form>
 
+      <PasswordCard />
+
       <section className="adm-card adm-rise adm-supabase" style={{ animationDelay: '.18s' }}>
         <span className="adm-stat-icon"><Database size={20} /></span>
         <div className="adm-grow">
@@ -153,5 +156,76 @@ export default function SettingsPage() {
         onClose={() => setConfirmReset(false)}
       />
     </div>
+  );
+}
+
+function PasswordCard() {
+  const { updatePassword } = useAdminAuth();
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState('');
+
+  const update = useMutation({
+    mutationFn: () => updatePassword(next),
+    onSuccess: () => {
+      setNext('');
+      setConfirm('');
+      setError('');
+      toast({ title: 'Password updated', description: "Use your new password next time you sign in." });
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : 'Could not update password.'),
+  });
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (next.length < 6) return setError('Password must be at least 6 characters.');
+    if (next !== confirm) return setError('Passwords don’t match.');
+    setError('');
+    update.mutate();
+  };
+
+  return (
+    <section className="adm-card adm-rise" style={{ animationDelay: '.15s' }}>
+      <h2 className="adm-section-title">Change password</h2>
+      {isSupabaseConnected ? (
+        <form className="adm-form-grid" onSubmit={onSubmit}>
+          <label className="adm-field">
+            <span>New password</span>
+            <div className="adm-input-icon">
+              <KeyRound size={16} />
+              <input
+                type={show ? 'text' : 'password'}
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+              />
+              <button type="button" className="adm-input-action" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'}>
+                {show ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </label>
+          <label className="adm-field">
+            <span>Confirm new password</span>
+            <input
+              type={show ? 'text' : 'password'}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="new-password"
+            />
+          </label>
+          {error && <p className="adm-form-error adm-span-2" role="alert">{error}</p>}
+          <div className="adm-span-2">
+            <button type="submit" className="adm-btn adm-btn-primary" disabled={update.isPending || !next || !confirm}>
+              {update.isPending ? 'Updating…' : 'Update password'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="adm-muted adm-small">Connect Supabase to change your sign-in password — the demo login isn’t real security.</p>
+      )}
+    </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ExternalLink, FileText, FolderKanban, LayoutDashboard, LogOut, Mail, Menu, Settings, X,
+  ExternalLink, FileText, FolderKanban, Images, LayoutDashboard, LogOut, Mail, Menu, Settings, X,
 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, useLocation } from 'wouter';
 import { AdminAuthProvider, useAdminAuth } from './auth';
@@ -11,6 +11,7 @@ import DashboardPage from './pages/dashboard';
 import PostsPage from './pages/posts';
 import PostEditorPage from './pages/post-editor';
 import ProjectsPage from './pages/projects';
+import ImagesPage from './pages/images';
 import MessagesPage from './pages/messages';
 import SettingsPage from './pages/settings';
 import './admin.css';
@@ -55,6 +56,7 @@ function AdminRoutes() {
         <Route path="/posts/new">{() => <PostEditorPage />}</Route>
         <Route path="/posts/:id">{(params) => <PostEditorPage id={params.id} />}</Route>
         <Route path="/projects" component={ProjectsPage} />
+        <Route path="/images" component={ImagesPage} />
         <Route path="/messages" component={MessagesPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route><Redirect to="/" replace /></Route>
@@ -67,6 +69,7 @@ const nav = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/posts', label: 'Blog posts', icon: FileText },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/images', label: 'Images', icon: Images },
   { href: '/messages', label: 'Messages', icon: Mail },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

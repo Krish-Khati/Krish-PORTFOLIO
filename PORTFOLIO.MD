@@ -12,6 +12,27 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-28 — Admin: session expiry, change password, Images page
+
+**Admin login no longer stays signed in forever**
+- `src/lib/supabase.ts`: Supabase client now uses `persistSession: false`, so the admin session lives only in memory. Closing the tab/browser (or reloading the page) signs the admin out — next visit asks for email + password again.
+
+**New: Change password (Settings)**
+- `src/admin/auth.tsx`: added `updatePassword()` using `supabase.auth.updateUser({ password })`.
+- `src/admin/pages/settings.tsx`: new "Change password" card (new password + confirm, shown only when Supabase is connected, since the demo login has no real password).
+
+**New: Images page (`/admin/images`)**
+- Manage every photo on the site from the admin panel instead of touching code:
+  - **Hero background** — replaces the hero video with an uploaded image when set.
+  - **About / My journey photo** — fills the photo placeholder in the "Small town. Big intent." section.
+  - **Project images** — a thumbnail per project, shown next to it in "Things built to learn."
+- `src/admin/api.ts`: generalized `uploadCover` into `uploadImage` (same "covers" storage bucket, now used for all image types); `SiteSettings` gained `heroImage` / `aboutPhoto`; `AdminProject` gained `image`.
+- `src/data/live.ts`, `src/data/projects.ts`, `src/App.tsx`, `src/index.css`: public site reads and renders the new fields (hero `<img>` fallback, about photo, project thumbnail), all optional — nothing changes on the live site until an image is set.
+- `supabase/add-project-images.sql` (new) + `supabase/schema.sql` updated: adds the `image` column to `projects`. **Owner action needed:** run `supabase/add-project-images.sql` once in the Supabase SQL editor to enable project images (hero image, about photo and password change need no SQL — they work immediately).
+
+**Verification**
+- `pnpm --filter @workspace/krish-portfolio run typecheck` ✅ and production `vite build` ✅.
+
 ### 2026-09-24 — Blog page + site-wide animations
 
 **New: Blog (`/blog`, `/blog/:slug`)**
