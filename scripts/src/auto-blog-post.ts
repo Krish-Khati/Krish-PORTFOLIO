@@ -320,12 +320,58 @@ function extractJsonObject(text: string): string {
   return trimmed;
 }
 
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1].trim() : trimmed;
+}
+
+const fixTrailingCommas = (text: string) => text.replace(/,\s*([}\]])/g, '$1');
+
+// Tries to recover a valid JSON object out of raw model text that failed strict validation:
+// strips markdown code fences, extracts a balanced {...} span, and removes trailing commas — the
+// handful of small issues that make an otherwise-complete post fail JSON parsing. Returns
+// undefined (rather than throwing) if nothing here produces valid JSON.
+function tryRecoverJson(raw: string): string | undefined {
+  for (const candidate of [raw, stripCodeFences(raw)]) {
+    const extracted = extractJsonObject(candidate);
+    for (const attempt of [extracted, fixTrailingCommas(extracted)]) {
+      try {
+        JSON.parse(attempt);
+        return attempt;
+      } catch {
+        // try the next variant
+      }
+    }
+  }
+  return undefined;
+}
+
+// A 1200-word post plus JSON structure (block wrappers, escaped quotes) can run well past Groq's
+// default max output tokens, which truncates the JSON mid-object — this is generous headroom.
+const GROQ_MAX_COMPLETION_TOKENS = 8000;
+
+class GroqApiError extends HttpError {
+  code?: string;
+  failedGeneration?: string;
+  constructor(status: number, model: string, rawBody: string, info?: { message?: string; code?: string; failed_generation?: string }) {
+    super(status, `Groq API error ${status} (model "${model}")${info?.code ? ` [${info.code}]` : ''}: ${(info?.message ?? rawBody).slice(0, 300)}`);
+    this.name = 'GroqApiError';
+    this.code = info?.code;
+    this.failedGeneration = info?.failed_generation;
+  }
+}
+
 async function callGroqModel(model: string, prompt: string): Promise<ProviderResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
 
   const request = (withJsonMode: boolean) => withTimeout(async (signal) => {
-    const body: Record<string, unknown> = { model, messages: [{ role: 'user', content: prompt }] };
+    const body: Record<string, unknown> = {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_completion_tokens: GROQ_MAX_COMPLETION_TOKENS,
+    };
     if (withJsonMode) body.response_format = { type: 'json_object' };
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -335,10 +381,16 @@ async function callGroqModel(model: string, prompt: string): Promise<ProviderRes
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
+      let errorInfo: { message?: string; code?: string; failed_generation?: string } | undefined;
+      try {
+        errorInfo = (JSON.parse(errBody) as { error?: typeof errorInfo }).error;
+      } catch {
+        // body wasn't JSON — errorInfo stays undefined, GroqApiError falls back to the raw text
+      }
       // A model that disappeared from the catalog or doesn't support this request shouldn't be
       // retried — withRetry would just hit the same error again — so this still throws normally
       // and generateOnce() moves straight on to the next model.
-      throw new HttpError(res.status, `Groq API error ${res.status} (model "${model}"): ${errBody.slice(0, 300)}`);
+      throw new GroqApiError(res.status, model, errBody, errorInfo);
     }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const text = data.choices?.[0]?.message?.content;
@@ -350,10 +402,23 @@ async function callGroqModel(model: string, prompt: string): Promise<ProviderRes
   try {
     text = await request(true);
   } catch (err) {
-    // Some models (reasoning models in particular) reject response_format entirely — fall back
-    // to a plain request and pull the JSON out of the final answer text instead.
+    const isJsonValidateFailure = err instanceof GroqApiError && err.code === 'json_validate_failed';
+
+    if (isJsonValidateFailure && (err as GroqApiError).failedGeneration) {
+      // Groq's own JSON-mode validator rejected the output, but the model usually still produced
+      // a complete, recoverable post in `failed_generation` — try to salvage it before falling
+      // back to a plain request.
+      const recovered = tryRecoverJson((err as GroqApiError).failedGeneration!);
+      if (recovered) return { text: recovered, model };
+      console.warn(`[Groq] (${model}) json_validate_failed and failed_generation wasn't recoverable — retrying without JSON mode…`);
+    }
+
+    // A json_validate_failed error, or any other 400 that means this model rejects
+    // response_format entirely (reasoning models in particular), falls back to a plain request
+    // and pulls the JSON out of the final answer text instead. Any other error is not retried
+    // here — it's thrown straight through to generateOnce(), which moves on to the next model.
     const rejectsJsonMode = err instanceof HttpError && err.status === 400 &&
-      /response_format|json_object|json_schema|unsupported/i.test(err.message);
+      (isJsonValidateFailure || /response_format|json_object|json_schema|unsupported/i.test(err.message));
     if (!rejectsJsonMode) throw err;
     text = await request(false);
   }

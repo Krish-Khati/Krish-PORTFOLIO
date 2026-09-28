@@ -175,6 +175,16 @@ export type PickModelOrderOptions = {
   log?: (line: string) => void;
 };
 
+// A transient blip on the models-list call itself shouldn't be enough to fall back to the tiny
+// emergency list (which would then only offer -latest aliases) — one quick retry first.
+async function listWithOneRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    return await fn();
+  }
+}
+
 /**
  * Builds the ordered list of {provider, model} to try, Gemini first then Groq. Each provider is
  * skipped entirely if no API key is given for it.
@@ -189,7 +199,8 @@ export async function pickModelOrder(opts: PickModelOrderOptions): Promise<Model
       log(`[ai-model-picker] Gemini: using override list — ${geminiRanked.join(', ')}`);
     } else {
       try {
-        geminiRanked = rankGeminiModels(await listGeminiModels(opts.geminiApiKey));
+        const apiKey = opts.geminiApiKey;
+        geminiRanked = rankGeminiModels(await listWithOneRetry(() => listGeminiModels(apiKey)));
         log(`[ai-model-picker] Gemini: ranked live models — ${geminiRanked.join(', ') || '(none found)'}`);
       } catch (err) {
         geminiRanked = EMERGENCY_GEMINI_MODELS;
@@ -205,7 +216,8 @@ export async function pickModelOrder(opts: PickModelOrderOptions): Promise<Model
       log(`[ai-model-picker] Groq: using override list — ${groqRanked.join(', ')}`);
     } else {
       try {
-        groqRanked = rankGroqModels(await listGroqModels(opts.groqApiKey));
+        const apiKey = opts.groqApiKey;
+        groqRanked = rankGroqModels(await listWithOneRetry(() => listGroqModels(apiKey)));
         log(`[ai-model-picker] Groq: ranked live models — ${groqRanked.join(', ') || '(none found)'}`);
       } catch (err) {
         groqRanked = EMERGENCY_GROQ_MODELS;
