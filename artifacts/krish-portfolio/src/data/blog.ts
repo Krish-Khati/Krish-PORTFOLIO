@@ -5,6 +5,8 @@ export type BlogBlock =
   | { type: 'list'; items: string[] }
   | { type: 'code'; lang: string; text: string };
 
+export type BlogFaq = { question: string; answer: string };
+
 export type BlogPost = {
   slug: string;
   title: string;
@@ -13,7 +15,43 @@ export type BlogPost = {
   date: string; // ISO yyyy-mm-dd
   cover?: string; // cover image URL; posts without one get a themed gradient
   blocks: BlogBlock[];
+  // SEO fields (supabase/add-seo.sql). All optional: empty means "fall back to title/excerpt".
+  seoTitle?: string;
+  metaDescription?: string;
+  focusKeyword?: string;
+  faqs?: BlogFaq[];
+  coverAlt?: string;
+  updatedAt?: string;
 };
+
+const str = (v: unknown) => (typeof v === 'string' ? v : '');
+
+export function faqsFromJson(v: unknown): BlogFaq[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((f) => ({ question: str((f as BlogFaq)?.question).trim(), answer: str((f as BlogFaq)?.answer).trim() }))
+    .filter((f) => f.question && f.answer);
+}
+
+// Maps a Supabase `posts` row (snake_case) to a BlogPost. Any column that doesn't exist yet
+// (e.g. before add-seo.sql has been run) is simply undefined here and falls back to ''.
+export function postFromRow(row: Record<string, unknown>): BlogPost {
+  return {
+    slug: str(row.slug),
+    title: str(row.title),
+    excerpt: str(row.excerpt),
+    category: str(row.category) as BlogPost['category'],
+    date: str(row.date),
+    cover: str(row.cover),
+    blocks: Array.isArray(row.blocks) ? (row.blocks as BlogBlock[]) : [],
+    seoTitle: str(row.seo_title),
+    metaDescription: str(row.meta_description),
+    focusKeyword: str(row.focus_keyword),
+    faqs: faqsFromJson(row.faqs),
+    coverAlt: str(row.cover_alt),
+    updatedAt: str(row.updated_at),
+  };
+}
 
 // Starter posts — edit the text, dates and categories freely. Posts are shown newest first.
 export const blogPosts: BlogPost[] = [
@@ -124,14 +162,16 @@ const bundledCovers = new Set([
 
 export function withCover<T extends BlogPost>(post: T): T {
   if (post.cover || !bundledCovers.has(post.slug)) return post;
-  return { ...post, cover: `${import.meta.env.BASE_URL}blog-covers/${post.slug}.jpg` };
+  // import.meta.env only exists inside Vite; the build-time prerender script runs outside it.
+  const base = import.meta.env?.BASE_URL ?? '/';
+  return { ...post, cover: `${base}blog-covers/${post.slug}.jpg` };
 }
 
 export function getPost(slug: string) {
   return blogPosts.find((p) => p.slug === slug);
 }
 
-export function readingMinutes(post: BlogPost) {
+export function readingMinutes(post: Pick<BlogPost, 'blocks'>) {
   const words = post.blocks
     .map((b) => (b.type === 'list' ? b.items.join(' ') : b.text))
     .join(' ')

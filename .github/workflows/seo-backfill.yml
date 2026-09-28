@@ -1,0 +1,46 @@
+name: SEO backfill
+
+# One-time (safe to re-run) job that fills in the SEO fields — focus keyword, SEO title, meta
+# description, FAQs and cover alt text — for posts that don't have them yet, then rebuilds the
+# site. Run supabase/add-seo.sql in Supabase first. Start it from the Actions tab: "SEO backfill"
+# → "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      overwrite:
+        description: 'Regenerate SEO fields even for posts that already have them'
+        type: boolean
+        default: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fill in missing SEO fields
+        run: pnpm --filter @workspace/scripts run seo-backfill
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          OVERWRITE: ${{ inputs.overwrite }}

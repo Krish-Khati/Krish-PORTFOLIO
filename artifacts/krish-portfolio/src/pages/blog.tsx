@@ -8,6 +8,8 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
+import { blogListMeta } from '@/seo/meta';
+import { useSeo } from '@/seo/use-seo';
 
 // Optional flag a post may carry (e.g. from Supabase); without it the newest posts are featured.
 const isFeatured = (p: BlogPost) => !!(p as BlogPost & { featured?: boolean | null }).featured;
@@ -30,7 +32,7 @@ function PostCover({ post, className }: { post: BlogPost; className: string }) {
   return (
     <div className={className}>
       {cover ? (
-        <img src={cover} alt="" loading="lazy" />
+        <img src={cover} alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
       ) : (
         <div className="bx-cover-fallback" aria-hidden="true">
           <Icon size={46} strokeWidth={1.4} />
@@ -156,12 +158,10 @@ export default function BlogPage() {
   }, [all]);
   const latest = all[0];
 
+  useSeo(allPosts ? blogListMeta(allPosts, settings) : null);
+
   useEffect(() => {
-    document.title = 'Blog — Krish';
     window.scrollTo(0, 0);
-    return () => {
-      document.title = 'Krish — Aspiring Software Developer';
-    };
   }, []);
 
   const posts = useMemo(() => {

@@ -51,7 +51,9 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
           <li key={s.id}>
             <a
               href={`${prefix}#${s.id}`}
-              className={!onBlog && active === s.id ? 'active' : undefined}
+              className={
+                (location === '/' && !onBlog && active === s.id) || (location === '/projects' && s.id === 'work') ? 'active' : undefined
+              }
               onClick={() => setOpen(false)}
             >
               {s.label}

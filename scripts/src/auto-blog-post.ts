@@ -1,6 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import { ApiError, GoogleGenAI, Type } from '@google/genai';
+import { type Schema, Type } from '@google/genai';
 import { pickModelOrder, type ModelChoice } from './ai-model-picker';
+import { generateOnce, newBreakerState, parseModelChoice, parseModelChoiceList } from './ai-generate';
+import {
+  type Block, cleanFaqs, containsKeyword, type Faq, fitCoverAlt, fitMetaDescription, fitTitle, fixInternalLinks,
+  type LinkTarget, normalizeKeyword, OPTIONAL_POST_COLUMNS, SEO_TITLE_MAX, shortSlug, stripLinks, triggerDeployHook,
+  writeWithOptionalColumns,
+} from './seo';
 
 /*
  * Runs on a schedule (see .github/workflows/auto-blog-post.yml) to write one blog post for the
@@ -11,8 +17,16 @@ import { pickModelOrder, type ModelChoice } from './ai-model-picker';
  * the other is tried; a provider is skipped entirely once 2 of its models return 503 in a row.
  * Whichever model works is remembered in Supabase and tried first next time; a model that's
  * actually gone (404) is remembered too, and excluded from then on.
+ *
+ * Every post also comes with SEO fields (focus keyword, SEO title, meta description, short keyword
+ * slug, FAQs, cover alt text) and 2–3 internal links. Lengths and links are checked and auto-fixed
+ * in code (seo.ts); the keyword placement is checked too, with one retry if the model missed it.
+ * When the post is published automatically, the Vercel Deploy Hook rebuilds the site so the post
+ * gets its prerendered page + sitemap/RSS entry (and that build pings IndexNow).
+ *
  * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
- * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY is optional).
+ * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY and
+ * VERCEL_DEPLOY_HOOK are optional).
  */
 
 const GEMINI_API_KEY = requireEnv('GEMINI_API_KEY');
@@ -28,17 +42,12 @@ function requireEnv(name: string): string {
 const categories = ['Journey', 'Learning', 'Projects', 'AI', 'Marketing'] as const;
 type Category = (typeof categories)[number];
 
-type Block =
-  | { type: 'p'; text: string }
-  | { type: 'h2'; text: string }
-  | { type: 'quote'; text: string }
-  | { type: 'list'; items: string[] }
-  | { type: 'code'; lang: string; text: string };
-
-type GeneratedPost = { title: string; excerpt: string; category: Category; blocks: Block[] };
+type GeneratedPost = {
+  title: string; excerpt: string; category: Category; blocks: Block[];
+  focusKeyword: string; seoTitle: string; metaDescription: string; slug: string; faqs: Faq[]; coverAlt: string;
+};
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 // GitHub Models (an earlier free backup) was retired in July 2026, so Groq is the backup instead.
 // Optional override: set these GitHub repo variables to try specific model ids first (comma
@@ -54,88 +63,15 @@ function parseCsvEnv(name: string): string[] | undefined {
   return list.length ? list : undefined;
 }
 
-// One retry, 10s wait, on a retryable error (503/429) — never for 404/403/400. Kept short because
-// a run may try several models, and on an invalid response, tries the whole chain a second time —
-// all within the overall time budget below and the GitHub Actions job's 15-minute timeout.
-const RETRY_DELAYS_MS = [10_000];
-
 // Stop trying more models after this long, so a run with many candidates still finishes well
-// inside the GitHub Actions job's 15-minute timeout.
+// inside the GitHub Actions job's timeout.
 const TOTAL_MODEL_BUDGET_MS = 8 * 60 * 1000;
-
-// A single request to a model (Gemini or Groq) is aborted if it hasn't responded by this point,
-// so a stalled connection can never hang the whole run — it just becomes a normal failure and
-// generateOnce() moves on to the next model. Every AI request goes through withTimeout() below.
-const MODEL_TIMEOUT_MS = 90_000;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = 'HttpError';
-    this.status = status;
-  }
-}
-
-class TimeoutError extends Error {
-  constructor(ms: number) {
-    super(`request timed out after ${ms / 1000}s`);
-    this.name = 'TimeoutError';
-  }
-}
-
-// Runs `fn` with an AbortController that's aborted after MODEL_TIMEOUT_MS, and passes the
-// resulting signal through so both the Gemini SDK's abortSignal option and plain fetch() can use
-// the same mechanism.
-async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new TimeoutError(MODEL_TIMEOUT_MS)), MODEL_TIMEOUT_MS);
-  try {
-    return await fn(controller.signal);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function isRetryableError(err: unknown): boolean {
-  if (err instanceof ApiError || err instanceof HttpError) return err.status === 503 || err.status === 429;
-  const message = err instanceof Error ? err.message : String(err);
-  return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|network|socket hang up/i.test(message);
-}
-
-// Timeouts are never retried on the same model (a timeout counts as a failure and generateOnce()
-// moves straight to the next model), so this deliberately doesn't feed into isRetryableError.
-function isOverloadedError(err: unknown): boolean {
-  return (err instanceof ApiError || err instanceof HttpError) && err.status === 503;
-}
-
-// A model that's actually gone from the catalog (retired, decommissioned) rather than just
-// temporarily busy — worth remembering permanently (auto_post_settings.blocked_models) instead of
-// re-discovering it every run.
-function isPermanentlyUnavailable(err: unknown): boolean {
-  if ((err instanceof ApiError || err instanceof HttpError) && err.status === 404) return true;
-  const message = err instanceof Error ? err.message : String(err);
-  return /no longer available|model_not_found|model_decommissioned|has been deprecated|has been removed/i.test(message);
-}
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
-function slugify(title: string) {
-  return title
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 80);
-}
-
 function wordCount(blocks: Block[]) {
   return blocks
-    .map((b) => (b.type === 'list' ? b.items.join(' ') : b.text))
+    .map((b) => stripLinks(b.type === 'list' ? b.items.join(' ') : b.text))
     .join(' ')
     .trim()
     .split(/\s+/)
@@ -148,7 +84,7 @@ Supabase, Gemini), and also does video editing and content creation. He writes i
 simple, practical English — honest about what he does and doesn't know yet, never boastful. He never invents \
 statistics, quotes, credentials, jobs, or experiences that weren't given to him as notes.`;
 
-const responseSchema = {
+const responseSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     title: { type: Type.STRING },
@@ -169,8 +105,22 @@ const responseSchema = {
         required: ['type'],
       },
     },
+    focus_keyword: { type: Type.STRING, description: 'Realistic long-tail search phrase, 3-6 words, lowercase.' },
+    seo_title: { type: Type.STRING, description: 'Max 60 characters, contains the focus keyword.' },
+    meta_description: { type: Type.STRING, description: '140-160 characters, contains the focus keyword.' },
+    slug: { type: Type.STRING, description: 'Short keyword slug, 3-6 lowercase hyphenated words.' },
+    faqs: {
+      type: Type.ARRAY,
+      description: '3 or 4 questions readers search for, with short answers.',
+      items: {
+        type: Type.OBJECT,
+        properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } },
+        required: ['question', 'answer'],
+      },
+    },
+    cover_alt: { type: Type.STRING, description: 'Alt text for a cover image, max 125 characters.' },
   },
-  required: ['title', 'excerpt', 'category', 'blocks'],
+  required: ['title', 'excerpt', 'category', 'blocks', 'focus_keyword', 'seo_title', 'meta_description', 'slug', 'faqs', 'cover_alt'],
 };
 
 function buildPrompt(opts: {
@@ -178,6 +128,7 @@ function buildPrompt(opts: {
   topicNotes?: string;
   topicCategory?: Category;
   existingTitles: string[];
+  linkTargets: LinkTarget[];
   feedback?: string;
 }) {
   const parts = [PERSONA, ''];
@@ -185,7 +136,10 @@ function buildPrompt(opts: {
   if (opts.topicTitle) {
     parts.push(`Write today's post about this topic idea: "${opts.topicTitle}".`);
     if (opts.topicNotes) {
-      parts.push(`Krish's own notes/experience to build the post around (use these, don't ignore them):\n${opts.topicNotes}`);
+      parts.push(
+        `Krish's own notes/experience to build the post around. These notes are the MAIN source — use them, ` +
+        `don't ignore them, and don't add personal facts that aren't in them:\n${opts.topicNotes}`,
+      );
     }
     if (opts.topicCategory) parts.push(`It must use the category "${opts.topicCategory}".`);
   } else {
@@ -207,21 +161,58 @@ function buildPrompt(opts: {
     '- No made-up statistics, no fake quotes from other people, no claims about things Krish did not do.',
     '- Simple, friendly, first-person English — like a real journal/blog entry, not marketing copy.',
     '',
+    'SEO requirements (this is a new, small blog, so aim for searches it can realistically rank for):',
+    '- focus_keyword: ONE realistic long-tail search phrase (3-6 words, lowercase) that a beginner would actually ' +
+      'type into Google, specific to this post — not a broad, competitive term like "python" or "ai tools".',
+    '- Use the exact focus_keyword naturally in the FIRST paragraph (the first "p" block) and in at least one h2 heading. ' +
+      'Never stuff it; it should read naturally.',
+    `- seo_title: at most ${SEO_TITLE_MAX} characters, focus keyword near the start, honest (no clickbait), no site name.`,
+    '- meta_description: 140 to 160 characters, includes the focus keyword, summarises the post and gives a reason to click.',
+    '- slug: short keyword slug, 3-6 lowercase words joined by hyphens, based on the focus keyword (no dates).',
+    '- faqs: 3 or 4 questions a reader might search about this topic, each with a helpful 2-4 sentence answer that ' +
+      'agrees with the post. No invented personal facts about Krish in the answers.',
+    '- cover_alt: a literal description (max 125 characters) of a fitting cover photo for this post; do not start with "image of".',
+  );
+
+  if (opts.linkTargets.length) {
+    parts.push(
+      '- Internal links: inside "p" or "list" text, add 2 or 3 markdown links to the most related posts below, using ' +
+        'EXACTLY the paths shown, with natural link text (never "click here"), e.g. ' +
+        `[a few natural words about that post](/blog/${opts.linkTargets[0].slug}).`,
+      '- Also add exactly ONE link to either [my projects](/projects) or [get in touch](/#contact).',
+      '- Never link to any other page or invent URLs.',
+      'Existing posts you can link to:',
+      ...opts.linkTargets.map((t) => `- "${t.title}" — /blog/${t.slug} (${t.category}): ${t.excerpt}`),
+    );
+  } else {
+    parts.push('- Add exactly ONE markdown link to either [my projects](/projects) or [get in touch](/#contact) inside a "p" block.');
+  }
+
+  parts.push(
+    '',
     'Return ONLY a single JSON object, no markdown fences, no extra text, in exactly this shape:',
     '{ "title": string, "excerpt": string, "category": one of "Journey" | "Learning" | "Projects" | "AI" | "Marketing", ' +
-    '"blocks": Block[] }',
+    '"blocks": Block[], "focus_keyword": string, "seo_title": string, "meta_description": string, "slug": string, ' +
+    '"faqs": { "question": string, "answer": string }[], "cover_alt": string }',
     'Where each Block is one of:',
     '{ "type": "h2" | "p" | "quote", "text": string }',
     '{ "type": "list", "items": string[] }',
     '{ "type": "code", "lang": string, "text": string }',
   );
 
-  if (opts.feedback) parts.push('', `Your previous attempt was invalid: ${opts.feedback}. Fix this and try again.`);
+  if (opts.feedback) parts.push('', `Your previous attempt had problems: ${opts.feedback}. Fix these and try again.`);
 
   return parts.join('\n');
 }
 
-function validate(data: unknown, existingTitles: string[]): { ok: true; post: GeneratedPost } | { ok: false; reason: string } {
+type Validation =
+  | { ok: true; post: GeneratedPost; seoIssues: string[]; fixes: string[] }
+  | { ok: false; reason: string };
+
+// Hard checks (structure, word count) reject the attempt. SEO problems that can be fixed in code
+// are fixed (lengths, slug, links); the ones that can't (keyword placement, too few FAQs) are
+// returned as `seoIssues` so the caller can ask the model once more.
+function validate(data: unknown, existingTitles: string[], linkTargets: LinkTarget[]): Validation {
   if (!data || typeof data !== 'object') return { ok: false, reason: 'response was not a JSON object' };
   const d = data as Record<string, unknown>;
 
@@ -262,271 +253,108 @@ function validate(data: unknown, existingTitles: string[]): { ok: true; post: Ge
   const words = wordCount(blocks);
   if (words < 800 || words > 1200) return { ok: false, reason: `word count was ${words}, needs to be 800-1200` };
 
-  return { ok: true, post: { title: d.title.trim(), excerpt: d.excerpt.trim(), category: d.category as Category, blocks } };
-}
+  const title = d.title.trim();
+  const excerpt = d.excerpt.trim();
+  const category = d.category as Category;
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const seoIssues: string[] = [];
+  const fixes: string[] = [];
 
-// Retries one provider call on 503/429/network errors with increasing waits. Any other error
-// (bad API key, invalid request, etc.) is not retried and is thrown straight away.
-async function withRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await call();
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      if (!isRetryableError(err) || attempt >= RETRY_DELAYS_MS.length) {
-        console.error(`[${label}] attempt ${attempt + 1} failed, giving up: ${reason}`);
-        throw err;
-      }
-      const wait = RETRY_DELAYS_MS[attempt];
-      console.warn(`[${label}] attempt ${attempt + 1} failed (${reason}) — retrying in ${wait / 1000}s…`);
-      await sleep(wait);
-    }
+  // Focus keyword
+  let focusKeyword = normalizeKeyword(str(d.focus_keyword));
+  if (!focusKeyword) {
+    seoIssues.push('focus_keyword was missing');
+    focusKeyword = normalizeKeyword(title).split(' ').slice(0, 6).join(' ');
+  } else if (focusKeyword.split(' ').length > 8) {
+    fixes.push('focus keyword shortened to 6 words');
+    focusKeyword = focusKeyword.split(' ').slice(0, 6).join(' ');
   }
-}
 
-type ProviderResult = { text: string; model: string };
+  const firstParagraph = blocks.find((b) => b.type === 'p');
+  if (!firstParagraph || firstParagraph.type !== 'p' || !containsKeyword(firstParagraph.text, focusKeyword)) {
+    seoIssues.push(`the exact focus keyword "${focusKeyword}" must appear in the first paragraph`);
+  }
+  if (!blocks.some((b) => b.type === 'h2' && containsKeyword(b.text, focusKeyword))) {
+    seoIssues.push(`the exact focus keyword "${focusKeyword}" must appear in at least one h2 heading`);
+  }
 
-function callGemini(model: string) {
-  return async (prompt: string): Promise<ProviderResult> => {
-    return withTimeout(async (signal) => {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema,
-          abortSignal: signal,
-          httpOptions: { timeout: MODEL_TIMEOUT_MS },
-        },
-      });
-      const text = response.text;
-      if (!text) throw new Error('Gemini returned an empty response.');
-      return { text, model };
-    });
+  // SEO title (max 60)
+  const rawSeoTitle = str(d.seo_title) || title;
+  const seoTitle = fitTitle(rawSeoTitle);
+  if (seoTitle !== rawSeoTitle) fixes.push(`SEO title shortened from ${rawSeoTitle.length} to ${seoTitle.length} characters`);
+
+  // Meta description (140–160)
+  const rawMeta = str(d.meta_description) || excerpt;
+  const paragraphs = blocks.flatMap((b) => (b.type === 'p' ? [b.text] : []));
+  const metaDescription = fitMetaDescription(rawMeta, [excerpt, ...paragraphs]);
+  if (metaDescription !== rawMeta) fixes.push(`meta description adjusted from ${rawMeta.length} to ${metaDescription.length} characters`);
+
+  // Short keyword slug
+  const slug = shortSlug(str(d.slug) || focusKeyword || title) || shortSlug(title) || 'post';
+
+  // FAQs (3–4)
+  const faqs = cleanFaqs(d.faqs);
+  if (faqs.length < 3) seoIssues.push(`faqs needs 3 or 4 question/answer pairs (got ${faqs.length})`);
+
+  // Cover alt text
+  const coverAlt = fitCoverAlt(str(d.cover_alt), title);
+
+  // Internal links: unknown/duplicate links removed, missing ones topped up.
+  const linked = fixInternalLinks(blocks, linkTargets, category);
+  fixes.push(...linked.notes);
+
+  return {
+    ok: true,
+    post: { title, excerpt, category, blocks: linked.blocks, focusKeyword, seoTitle, metaDescription, slug, faqs, coverAlt },
+    seoIssues,
+    fixes,
   };
 }
 
-// Extracts the JSON object from a model's text output. Fast path: the whole trimmed text is
-// already valid JSON (the normal case). Fallback: some reasoning models (e.g. Groq's gpt-oss)
-// emit reasoning/commentary before or around the final answer, so this scans for a balanced
-// {...} span and parses just that — the "final answer only" part of the JSON.
-function extractJsonObject(text: string): string {
-  const trimmed = text.trim();
-  try {
-    JSON.parse(trimmed);
-    return trimmed;
-  } catch {
-    // fall through to brace extraction below
-  }
-  const start = trimmed.indexOf('{');
-  if (start === -1) return trimmed;
-  let depth = 0;
-  for (let i = start; i < trimmed.length; i++) {
-    if (trimmed[i] === '{') depth++;
-    else if (trimmed[i] === '}') {
-      depth--;
-      if (depth === 0) return trimmed.slice(start, i + 1);
-    }
-  }
-  return trimmed;
-}
-
-function stripCodeFences(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return match ? match[1].trim() : trimmed;
-}
-
-const fixTrailingCommas = (text: string) => text.replace(/,\s*([}\]])/g, '$1');
-
-// Tries to recover a valid JSON object out of raw model text that failed strict validation:
-// strips markdown code fences, extracts a balanced {...} span, and removes trailing commas — the
-// handful of small issues that make an otherwise-complete post fail JSON parsing. Returns
-// undefined (rather than throwing) if nothing here produces valid JSON.
-function tryRecoverJson(raw: string): string | undefined {
-  for (const candidate of [raw, stripCodeFences(raw)]) {
-    const extracted = extractJsonObject(candidate);
-    for (const attempt of [extracted, fixTrailingCommas(extracted)]) {
-      try {
-        JSON.parse(attempt);
-        return attempt;
-      } catch {
-        // try the next variant
-      }
-    }
-  }
-  return undefined;
-}
-
-// A 1200-word post plus JSON structure (block wrappers, escaped quotes) can run well past Groq's
-// default max output tokens, which truncates the JSON mid-object — this is generous headroom.
-const GROQ_MAX_COMPLETION_TOKENS = 8000;
-
-class GroqApiError extends HttpError {
-  code?: string;
-  failedGeneration?: string;
-  constructor(status: number, model: string, rawBody: string, info?: { message?: string; code?: string; failed_generation?: string }) {
-    super(status, `Groq API error ${status} (model "${model}")${info?.code ? ` [${info.code}]` : ''}: ${(info?.message ?? rawBody).slice(0, 300)}`);
-    this.name = 'GroqApiError';
-    this.code = info?.code;
-    this.failedGeneration = info?.failed_generation;
-  }
-}
-
-async function callGroqModel(model: string, prompt: string): Promise<ProviderResult> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error('GROQ_API_KEY is not set.');
-
-  const request = (withJsonMode: boolean) => withTimeout(async (signal) => {
-    const body: Record<string, unknown> = {
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: GROQ_MAX_COMPLETION_TOKENS,
-    };
-    if (withJsonMode) body.response_format = { type: 'json_object' };
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal,
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      let errorInfo: { message?: string; code?: string; failed_generation?: string } | undefined;
-      try {
-        errorInfo = (JSON.parse(errBody) as { error?: typeof errorInfo }).error;
-      } catch {
-        // body wasn't JSON — errorInfo stays undefined, GroqApiError falls back to the raw text
-      }
-      // A model that disappeared from the catalog or doesn't support this request shouldn't be
-      // retried — withRetry would just hit the same error again — so this still throws normally
-      // and generateOnce() moves straight on to the next model.
-      throw new GroqApiError(res.status, model, errBody, errorInfo);
-    }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const text = data.choices?.[0]?.message?.content;
-    if (!text) throw new Error('Groq returned an empty response.');
-    return text;
-  });
-
-  let text: string;
-  try {
-    text = await request(true);
-  } catch (err) {
-    const isJsonValidateFailure = err instanceof GroqApiError && err.code === 'json_validate_failed';
-
-    if (isJsonValidateFailure && (err as GroqApiError).failedGeneration) {
-      // Groq's own JSON-mode validator rejected the output, but the model usually still produced
-      // a complete, recoverable post in `failed_generation` — try to salvage it before falling
-      // back to a plain request.
-      const recovered = tryRecoverJson((err as GroqApiError).failedGeneration!);
-      if (recovered) return { text: recovered, model };
-      console.warn(`[Groq] (${model}) json_validate_failed and failed_generation wasn't recoverable — retrying without JSON mode…`);
-    }
-
-    // A json_validate_failed error, or any other 400 that means this model rejects
-    // response_format entirely (reasoning models in particular), falls back to a plain request
-    // and pulls the JSON out of the final answer text instead. Any other error is not retried
-    // here — it's thrown straight through to generateOnce(), which moves on to the next model.
-    const rejectsJsonMode = err instanceof HttpError && err.status === 400 &&
-      (isJsonValidateFailure || /response_format|json_object|json_schema|unsupported/i.test(err.message));
-    if (!rejectsJsonMode) throw err;
-    text = await request(false);
-  }
-
-  return { text: extractJsonObject(text), model };
-}
-
-function callProvider(choice: ModelChoice, prompt: string): Promise<ProviderResult> {
-  return choice.provider === 'gemini' ? callGemini(choice.model)(prompt) : callGroqModel(choice.model, prompt);
-}
-
-function providerLabel(choice: ModelChoice) {
-  return `${choice.provider === 'gemini' ? 'Gemini' : 'Groq'} (${choice.model})`;
-}
-
-// Per-provider circuit breaker state, shared across both generateOnce() passes within one
-// generateValidPost() call: once a provider returns 503 from 2 different models in a row, the
-// rest of that provider's models are skipped for the remainder of the run instead of wasting the
-// time budget retrying a provider that's clearly overloaded right now.
-type BreakerState = { consecutiveOverloads: Record<ModelChoice['provider'], number>; broken: Set<ModelChoice['provider']> };
-const newBreakerState = (): BreakerState => ({ consecutiveOverloads: { gemini: 0, groq: 0 }, broken: new Set() });
-
-// Tries each model in `order`, most-preferred first, until one returns parseable JSON or the
-// overall time budget (`deadline`) runs out. `onOverloaded` is called for every model that fails
-// with a 503 (after retries), so the caller can remember to avoid starting with it next run.
-// `onPermanentlyUnavailable` is called for every model that's actually gone (404), so the caller
-// can remember to exclude it from now on.
-async function generateOnce(
-  prompt: string,
-  order: ModelChoice[],
-  deadline: number,
-  breaker: BreakerState,
-  onOverloaded: (choice: ModelChoice) => void,
-  onPermanentlyUnavailable: (choice: ModelChoice) => void,
-): Promise<{ data: unknown; writer: string; usedChoice: ModelChoice }> {
-  const failures: string[] = [];
-  for (const choice of order) {
-    if (Date.now() >= deadline) {
-      failures.push('stopped — time budget exceeded before trying the remaining models');
-      break;
-    }
-    const providerName = choice.provider === 'gemini' ? 'Gemini' : 'Groq';
-    const label = providerLabel(choice);
-    if (breaker.broken.has(choice.provider)) {
-      console.log(`Skipping ${label} — ${providerName}'s circuit breaker is open this run.`);
-      continue;
-    }
-    console.log(`Trying ${label}…`);
-    try {
-      const { text, model } = await withRetry(label, () => callProvider(choice, prompt));
-      return { data: JSON.parse(text) as unknown, writer: `${providerName} (${model})`, usedChoice: choice };
-    } catch (err) {
-      if (isOverloadedError(err)) {
-        onOverloaded(choice);
-        const count = (breaker.consecutiveOverloads[choice.provider] += 1);
-        if (count >= 2) {
-          breaker.broken.add(choice.provider);
-          console.warn(`${providerName}: 2 models in a row returned 503 — skipping the rest of ${providerName} this run.`);
-        }
-      } else {
-        breaker.consecutiveOverloads[choice.provider] = 0;
-        if (isPermanentlyUnavailable(err)) onPermanentlyUnavailable(choice);
-      }
-      const reason = err instanceof Error ? err.message : String(err);
-      failures.push(`${label}: ${reason}`);
-      console.warn(`${label} could not write the post — trying the next option…`);
-    }
-  }
-  const shown = failures.slice(0, 8);
-  const more = failures.length > shown.length ? ` … and ${failures.length - shown.length} more` : '';
-  throw new Error(`Every model failed. ${shown.join(' | ')}${more}`);
-}
-
 async function generateValidPost(opts: {
-  topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[]; order: ModelChoice[];
+  topicTitle?: string; topicNotes?: string; topicCategory?: Category; existingTitles: string[];
+  linkTargets: LinkTarget[]; order: ModelChoice[];
   onOverloaded: (choice: ModelChoice) => void;
   onPermanentlyUnavailable: (choice: ModelChoice) => void;
-}): Promise<{ post: GeneratedPost; writer: string; usedChoice: ModelChoice }> {
-  const deadline = Date.now() + TOTAL_MODEL_BUDGET_MS;
-  const breaker = newBreakerState();
+}): Promise<{ post: GeneratedPost; writer: string; usedChoice: ModelChoice; seoIssues: string[]; fixes: string[] }> {
+  const genOpts = {
+    keys: { geminiApiKey: GEMINI_API_KEY, groqApiKey: process.env.GROQ_API_KEY },
+    geminiSchema: responseSchema,
+    deadline: Date.now() + TOTAL_MODEL_BUDGET_MS,
+    breaker: newBreakerState(),
+    onOverloaded: opts.onOverloaded,
+    onPermanentlyUnavailable: opts.onPermanentlyUnavailable,
+  };
+  const check = (data: unknown) => validate(data, opts.existingTitles, opts.linkTargets);
 
-  const first = await generateOnce(buildPrompt(opts), opts.order, deadline, breaker, opts.onOverloaded, opts.onPermanentlyUnavailable);
-  const firstCheck = validate(first.data, opts.existingTitles);
-  if (firstCheck.ok) return { post: firstCheck.post, writer: first.writer, usedChoice: first.usedChoice };
+  const first = await generateOnce(buildPrompt(opts), opts.order, genOpts);
+  const firstCheck = check(first.data);
+  if (firstCheck.ok && !firstCheck.seoIssues.length) return { ...firstCheck, writer: first.writer, usedChoice: first.usedChoice };
 
-  console.warn(`First attempt (${first.writer}) was invalid (${firstCheck.reason}), retrying once…`);
-  const second = await generateOnce(
-    buildPrompt({ ...opts, feedback: firstCheck.reason }), opts.order, deadline, breaker, opts.onOverloaded, opts.onPermanentlyUnavailable,
-  );
-  const secondCheck = validate(second.data, opts.existingTitles);
-  if (secondCheck.ok) return { post: secondCheck.post, writer: second.writer, usedChoice: second.usedChoice };
+  const feedback = firstCheck.ok ? firstCheck.seoIssues.join('; ') : firstCheck.reason;
+  console.warn(`First attempt (${first.writer}) ${firstCheck.ok ? 'missed some SEO rules' : 'was invalid'} (${feedback}), retrying once…`);
 
-  throw new Error(`Output was invalid twice in a row (last from ${second.writer}): ${secondCheck.reason}`);
+  let second: Awaited<ReturnType<typeof generateOnce>>;
+  try {
+    second = await generateOnce(buildPrompt({ ...opts, feedback }), opts.order, genOpts);
+  } catch (err) {
+    // A structurally valid first post is still worth publishing if the SEO retry can't run.
+    if (firstCheck.ok) {
+      console.warn(`SEO retry failed (${err instanceof Error ? err.message : String(err)}) — keeping the first post.`);
+      return { ...firstCheck, writer: first.writer, usedChoice: first.usedChoice };
+    }
+    throw err;
+  }
+  const secondCheck = check(second.data);
+  if (secondCheck.ok && (!firstCheck.ok || secondCheck.seoIssues.length <= firstCheck.seoIssues.length)) {
+    return { ...secondCheck, writer: second.writer, usedChoice: second.usedChoice };
+  }
+  if (firstCheck.ok) return { ...firstCheck, writer: first.writer, usedChoice: first.usedChoice };
+
+  throw new Error(`Output was invalid twice in a row (last from ${second.writer}): ${secondCheck.ok ? '' : secondCheck.reason}`);
 }
 
-async function uniqueSlug(title: string) {
-  const base = slugify(title) || 'post';
+async function uniqueSlug(base: string) {
   const { data, error } = await supabase.from('posts').select('slug').ilike('slug', `${base}%`);
   if (error) throw new Error(error.message);
   const taken = new Set((data ?? []).map((r) => r.slug as string));
@@ -539,24 +367,6 @@ async function uniqueSlug(title: string) {
 async function logRun(status: 'success' | 'failed', topic: string, message = '') {
   const { error } = await supabase.from('auto_post_runs').insert({ status, topic, message });
   if (error) console.error(`Could not write run log: ${error.message}`);
-}
-
-// The auto_post_settings model-memory columns are stored as "<provider>:<model>", e.g.
-// "gemini:gemini-flash-latest" — parsed back into a ModelChoice for pickModelOrder.
-function parseModelChoice(raw: string | null | undefined): ModelChoice | undefined {
-  if (!raw) return undefined;
-  const sep = raw.indexOf(':');
-  if (sep === -1) return undefined;
-  const provider = raw.slice(0, sep);
-  const model = raw.slice(sep + 1);
-  if ((provider !== 'gemini' && provider !== 'groq') || !model) return undefined;
-  return { provider, model };
-}
-
-// blocked_models is a comma-separated list of the same "<provider>:<model>" format.
-function parseModelChoiceList(raw: string | null | undefined): ModelChoice[] {
-  if (!raw) return [];
-  return raw.split(',').map((s) => parseModelChoice(s.trim())).filter((c): c is ModelChoice => !!c);
 }
 
 async function main() {
@@ -590,9 +400,18 @@ async function main() {
   if (topicsError) throw new Error(`Could not read the topic queue: ${topicsError.message}`);
   const topic = topics?.[0] as { id: string; title: string; notes: string; category: Category } | undefined;
 
-  const { data: existingPosts, error: postsError } = await supabase.from('posts').select('title');
+  // '*' so this keeps working whether or not optional columns exist yet.
+  const { data: existingPosts, error: postsError } = await supabase.from('posts').select('*').order('date', { ascending: false });
   if (postsError) throw new Error(`Could not read existing posts: ${postsError.message}`);
-  const existingTitles = (existingPosts ?? []).map((p) => p.title as string);
+  const rows = (existingPosts ?? []) as { title: string; slug: string; category: string; excerpt: string; status: string }[];
+  const existingTitles = rows.map((p) => p.title);
+  // Only published posts are linkable (a draft's URL isn't public). Same category first.
+  const published = rows.filter((p) => p.status === 'published');
+  const wanted = topic?.category;
+  const linkTargets: LinkTarget[] = [...published]
+    .sort((a, b) => Number(b.category === wanted) - Number(a.category === wanted))
+    .slice(0, 25)
+    .map((p) => ({ title: p.title, slug: p.slug, category: p.category, excerpt: p.excerpt }));
 
   const order = await pickModelOrder({
     geminiApiKey: GEMINI_API_KEY,
@@ -615,28 +434,40 @@ async function main() {
   const newlyBlocked = new Set<string>();
 
   try {
-    const { post: generated, writer, usedChoice } = await generateValidPost({
+    const { post: generated, writer, usedChoice, seoIssues, fixes } = await generateValidPost({
       topicTitle: topic?.title,
       topicNotes: topic?.notes,
       topicCategory: topic?.category,
       existingTitles,
+      linkTargets,
       order,
       onOverloaded: (choice) => { overloadedChoice ??= choice; },
       onPermanentlyUnavailable: (choice) => { newlyBlocked.add(`${choice.provider}:${choice.model}`); },
     });
 
-    const slug = await uniqueSlug(generated.title);
-    const { error: insertError } = await supabase.from('posts').insert({
-      slug,
-      title: generated.title,
-      excerpt: generated.excerpt,
-      category: generated.category,
-      date: today,
-      status: publishAutomatically ? 'published' : 'draft',
-      blocks: generated.blocks,
-      cover: '',
+    const slug = await uniqueSlug(generated.slug);
+    const status = publishAutomatically ? 'published' : 'draft';
+    const skipped = await writeWithOptionalColumns(
+      {
+        slug,
+        title: generated.title,
+        excerpt: generated.excerpt,
+        category: generated.category,
+        date: today,
+        status,
+        blocks: generated.blocks,
+        cover: '',
+        seo_title: generated.seoTitle,
+        meta_description: generated.metaDescription,
+        focus_keyword: generated.focusKeyword,
+        faqs: generated.faqs,
+        cover_alt: generated.coverAlt,
+      },
+      OPTIONAL_POST_COLUMNS,
+      (row) => supabase.from('posts').insert(row),
+    ).catch((err: unknown) => {
+      throw new Error(`Could not save the post: ${err instanceof Error ? err.message : String(err)}`);
     });
-    if (insertError) throw new Error(`Could not save the post: ${insertError.message}`);
 
     if (topic) {
       const { error: markUsedError } = await supabase.from('auto_post_topics').update({ status: 'used' }).eq('id', topic.id);
@@ -647,8 +478,32 @@ async function main() {
       .from('auto_post_settings').update({ last_working_model: `${usedChoice.provider}:${usedChoice.model}` }).eq('id', 1);
     if (rememberError) console.error(`Post was saved, but could not remember the working model: ${rememberError.message}`);
 
-    await logRun('success', generated.title, `Written by ${writer}.`);
+    const linkCount = generated.blocks
+      .flatMap((b) => (b.type === 'list' ? b.items : b.type === 'p' || b.type === 'quote' ? [b.text] : []))
+      .join(' ')
+      .match(/\]\(\//g)?.length ?? 0;
+    const seoSummary = [
+      `keyword "${generated.focusKeyword}"`,
+      `title ${generated.seoTitle.length}/60`,
+      `meta ${generated.metaDescription.length} chars`,
+      `${linkCount} internal links`,
+      `${generated.faqs.length} FAQs`,
+    ].join(', ');
+    console.log(`SEO: ${seoSummary}.`);
+    if (fixes.length) console.log(`SEO auto-fixes: ${fixes.join('; ')}.`);
+    if (seoIssues.length) console.warn(`SEO notes (kept after retry): ${seoIssues.join('; ')}.`);
+    if (skipped.length) console.warn(`Saved without ${skipped.join(', ')} — run supabase/add-seo.sql in the Supabase SQL editor.`);
+
+    await logRun(
+      'success',
+      generated.title,
+      `Written by ${writer}. SEO: ${seoSummary}.${skipped.length ? ` Not saved (run add-seo.sql): ${skipped.join(', ')}.` : ''}`,
+    );
     console.log(`Created ${publishAutomatically ? 'and published' : 'draft'} post: "${generated.title}" (/blog/${slug}) — written by ${writer}`);
+
+    // Only a published post changes the public site; a draft gets rebuilt when it's published
+    // from the admin panel.
+    if (status === 'published') await triggerDeployHook(`new post /blog/${slug}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await logRun('failed', attemptLabel, message);

@@ -4,8 +4,15 @@ import { FileText, Pencil, Plus, Rocket, Search, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { toast } from '@/hooks/use-toast';
 import { formatPostDate } from '@/data/blog';
-import { type AdminPost, deletePost, listPosts, savePost } from '../api';
+import { seoScore } from '@/seo/score';
+import { type AdminPost, deletePost, listPosts, requestSiteRebuild, savePost } from '../api';
+import { SeoBadge } from '../seo-ui';
 import { ConfirmDialog, EmptyState, PageHeader, relativeTime, Skeleton } from '../ui';
+
+async function rebuildLiveSite() {
+  const r = await requestSiteRebuild();
+  toast({ title: r.ok ? 'Updating the live site' : 'Live site not rebuilt', description: r.message });
+}
 
 type Filter = 'all' | 'published' | 'draft';
 
@@ -21,20 +28,19 @@ export default function PostsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'posts'] });
       toast({ title: 'Post deleted', description: toDelete?.title });
+      if (toDelete?.status === 'published') void rebuildLiveSite();
       setToDelete(null);
     },
   });
 
   const publish = useMutation({
-    mutationFn: (post: AdminPost) =>
-      savePost({
-        id: post.id, title: post.title, slug: post.slug, excerpt: post.excerpt,
-        category: post.category, date: post.date, cover: post.cover, blocks: post.blocks,
-        status: 'published',
-      }),
-    onSuccess: (_, post) => {
+    // Passes every field (including SEO ones) through unchanged, only flipping the status.
+    mutationFn: (post: AdminPost) => savePost({ ...post, status: 'published' }),
+    onSuccess: (record, post) => {
       qc.invalidateQueries({ queryKey: ['admin', 'posts'] });
       toast({ title: 'Post published', description: post.title });
+      if (record.warning) toast({ title: 'Some SEO fields were not saved', description: record.warning });
+      void rebuildLiveSite();
     },
     onError: (err) => toast({ title: 'Could not publish', description: err instanceof Error ? err.message : undefined }),
   });
@@ -98,6 +104,7 @@ export default function PostsPage() {
                 <th>Title</th>
                 <th className="adm-hide-sm">Category</th>
                 <th>Status</th>
+                <th>SEO</th>
                 <th className="adm-hide-sm">Date</th>
                 <th className="adm-hide-md">Updated</th>
                 <th aria-label="Actions" />
@@ -112,6 +119,7 @@ export default function PostsPage() {
                   </td>
                   <td className="adm-hide-sm"><span className="adm-chip">{p.category}</span></td>
                   <td><span className={`adm-status adm-status-${p.status}`}>{p.status}</span></td>
+                  <td><SeoBadge result={seoScore(p)} compact /></td>
                   <td className="adm-hide-sm adm-nowrap">{formatPostDate(p.date)}</td>
                   <td className="adm-hide-md adm-muted adm-nowrap">{relativeTime(p.updatedAt)}</td>
                   <td>

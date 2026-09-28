@@ -37,6 +37,10 @@ jobs:
           # Optional free backup writer, used only if Gemini fails after retries. The script
           # works fine without this secret — it just has no backup until you add it.
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Optional: Vercel Deploy Hook URL. When a post is published automatically, the script calls
+          # it so the prerendered pages, sitemap.xml and rss.xml are rebuilt (and IndexNow is pinged).
+          # Without it the post still saves; it just shows up in the sitemap on the next deploy.
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
           # Optional: set these repo variables (Settings -> Secrets and variables -> Actions ->
           # Variables) to a comma-separated list of model ids to try first, e.g.
           # "gemini-flash-latest,gemini-2.5-flash". Leave unset for fully automatic model

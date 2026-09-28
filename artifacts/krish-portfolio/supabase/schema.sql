@@ -11,7 +11,13 @@ create table if not exists posts (
   status text not null default 'draft' check (status in ('draft', 'published')),
   blocks jsonb not null default '[]'::jsonb,
   cover text not null default '', -- cover image URL (see add-post-covers.sql for the storage bucket)
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- SEO fields (older projects: run add-seo.sql)
+  seo_title text not null default '',
+  meta_description text not null default '',
+  focus_keyword text not null default '',
+  faqs jsonb not null default '[]'::jsonb,
+  cover_alt text not null default ''
 );
 
 create table if not exists projects (
@@ -62,4 +68,5 @@ create policy "admin manages settings" on site_settings for all to authenticated
 
 -- Cover image storage: run add-post-covers.sql as well.
 -- Existing project table without the image column: run add-project-images.sql.
+-- Existing posts table without the SEO columns: run add-seo.sql.
 -- heroImage / aboutPhoto settings need no migration — they're just new keys in site_settings.data.

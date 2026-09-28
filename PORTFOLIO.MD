@@ -12,6 +12,31 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-28 (3) — Fully automatic SEO (prerendering, sitemap/RSS, SEO auto-posts, admin SEO panel)
+
+**Search engines now see real HTML**
+- `scripts/prerender.ts` runs after `vite build`: loads published posts, projects and settings from Supabase and writes `index.html`, `blog/index.html`, `blog/<slug>/index.html`, `projects/index.html` with the page's title, meta description, canonical, Open Graph/Twitter tags, JSON-LD and the full article text. Also writes `sitemap.xml`, `rss.xml`, `robots.txt` and `spa.html` (fallback shell for other URLs, e.g. admin). Fails the build if posts can't be loaded, so a broken build never replaces the live site.
+- `src/seo/*`: shared tag/JSON-LD builders (Person + WebSite on home, Blog, CollectionPage, BlogPosting + BreadcrumbList on posts, FAQPage when a post has FAQs), `useSeo()` keeps `<head>` in sync on client-side navigation, SEO score, related posts, inline `[text](/path)` links.
+- Posts: FAQ section, "Related posts" (3, same category first), inline internal links, cover alt text, lazy images. New `/projects` page. Footer links to Projects + RSS. Default 1200×630 share image `public/og-default.png`.
+- `vercel.json`: rewrites to `spa.html`, `trailingSlash: false`, `X-Robots-Tag: noindex` on `/admin`.
+
+**Publishing → redeploy → IndexNow**
+- `api/rebuild.ts` (Vercel function): checks the admin's Supabase session and calls the Deploy Hook in the server-side env var `VERCEL_DEPLOY_HOOK`. Called by the admin panel on publish / update of a published post / unpublish / delete.
+- The auto-post script calls the same hook (GitHub secret `VERCEL_DEPLOY_HOOK`) when it publishes.
+- Production builds ping IndexNow with only the URLs that are new or changed versus the live sitemap. Key file: `public/cdc12c37e7f44adfe1b7b8e92683bd1d.txt`.
+
+**Auto-post pipeline**
+- Shared AI code moved to `scripts/src/ai-generate.ts` (still uses `ai-model-picker.ts`, nothing hardcoded). `scripts/src/seo.ts` enforces SEO title ≤ 60, meta description 140–160, short keyword slug, 3–4 FAQs, cover alt, and valid internal links (2–3 posts + projects/contact), fixing them in code. Keyword placement in the first paragraph and an H2 is checked, with one retry.
+- `scripts/src/seo-backfill.ts` + workflow "SEO backfill": fills SEO fields for existing posts (no slug or text changes), then redeploys.
+
+**Admin**
+- Post editor: SEO panel (focus keyword, SEO title, meta description, slug with counters, Google preview, score + checklist), FAQ editor, cover alt text. Blog posts list: SEO score column.
+
+**Database**: one file, `supabase/add-seo.sql` (`add column if not exists`). **Owner action needed:** run it once. Until then, every part of the system saves without these columns and logs a warning.
+
+**Verification**
+- Typecheck (all packages) ✅, production build + prerender ✅ (5 posts from Supabase), 1 H1 per page ✅, sitemap/RSS/robots ✅, headless Chrome: React replaces the static HTML with a single set of head tags ✅, admin SEO panel renders ✅.
+
 ### 2026-09-28 (2) — Admin: editable Skills section, real tool logos
 
 **"My Capabilities" is now fully editable from the admin panel**

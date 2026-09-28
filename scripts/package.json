@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "auto-blog-post": "tsx ./src/auto-blog-post.ts",
+    "seo-backfill": "tsx ./src/seo-backfill.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

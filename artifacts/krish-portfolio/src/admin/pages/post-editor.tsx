@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Code2, Columns2, Eye, Heading2, ImagePlus, Link2, List, Loader2, PenLine, Quote, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Code2, Columns2, Eye, Heading2, ImagePlus, Link2, List, Loader2, PenLine, Plus, Quote, Save, Trash2, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { toast } from '@/hooks/use-toast';
-import type { BlogBlock } from '@/data/blog';
-import { deletePost, getPost, type PostCategory, postCategories, type PostStatus, savePost, uploadCover } from '../api';
+import type { BlogBlock, BlogFaq } from '@/data/blog';
+import { InlineText } from '@/components/rich-text';
+import { firstParagraph } from '@/seo/meta';
+import { META_MAX, META_MIN, SEO_TITLE_MAX, seoScore } from '@/seo/score';
+import {
+  deletePost, getPost, type PostCategory, postCategories, type PostStatus, requestSiteRebuild, savePost, uploadCover,
+} from '../api';
 import { blocksToText, slugify, textToBlocks, wordCount } from '../content';
+import { CharCounter, GooglePreview, SeoBadge, SeoChecklist } from '../seo-ui';
 import { ConfirmDialog, Skeleton } from '../ui';
 
 type Draft = {
@@ -16,11 +22,28 @@ type Draft = {
   date: string;
   status: PostStatus;
   cover: string;
+  coverAlt: string;
   body: string;
+  seoTitle: string;
+  metaDescription: string;
+  focusKeyword: string;
+  faqs: BlogFaq[];
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyDraft = (): Draft => ({ title: '', slug: '', excerpt: '', category: 'Journey', date: today(), status: 'draft', cover: '', body: '' });
+const emptyDraft = (): Draft => ({
+  title: '', slug: '', excerpt: '', category: 'Journey', date: today(), status: 'draft', cover: '', coverAlt: '', body: '',
+  seoTitle: '', metaDescription: '', focusKeyword: '', faqs: [],
+});
+
+const MAX_FAQS = 6;
+
+// Rebuilds the live site's prerendered pages + sitemap after a public change. Runs in the
+// background; the result shows up as a toast.
+async function rebuildLiveSite() {
+  const r = await requestSiteRebuild();
+  toast({ title: r.ok ? 'Updating the live site' : 'Live site not rebuilt', description: r.message });
+}
 
 type View = 'write' | 'split' | 'preview';
 
@@ -42,7 +65,12 @@ export default function PostEditorPage({ id }: { id?: string }) {
   }
 
   const initial: Draft = post
-    ? { title: post.title, slug: post.slug, excerpt: post.excerpt, category: post.category, date: post.date, status: post.status, cover: post.cover ?? '', body: blocksToText(post.blocks) }
+    ? {
+      title: post.title, slug: post.slug, excerpt: post.excerpt, category: post.category, date: post.date, status: post.status,
+      cover: post.cover ?? '', coverAlt: post.coverAlt ?? '', body: blocksToText(post.blocks),
+      seoTitle: post.seoTitle ?? '', metaDescription: post.metaDescription ?? '', focusKeyword: post.focusKeyword ?? '',
+      faqs: post.faqs ?? [],
+    }
     : emptyDraft();
 
   return <Editor key={id ?? 'new'} id={id} initial={initial} />;
@@ -62,6 +90,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const blocks = useMemo(() => textToBlocks(draft.body), [draft.body]);
   const words = wordCount(draft.body);
+  const seo = useMemo(() => seoScore({ ...draft, blocks }), [draft, blocks]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
@@ -79,14 +108,23 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
         date: next.date,
         status: next.status,
         cover: next.cover.trim(),
+        coverAlt: next.coverAlt.trim(),
         blocks: textToBlocks(next.body),
+        seoTitle: next.seoTitle.trim(),
+        metaDescription: next.metaDescription.trim(),
+        focusKeyword: next.focusKeyword.trim().toLowerCase(),
+        faqs: next.faqs.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })).filter((f) => f.question && f.answer),
       }),
     onSuccess: (record, next) => {
+      const wasPublic = saved.status === 'published';
       qc.invalidateQueries({ queryKey: ['admin', 'posts'] });
       qc.setQueryData(['admin', 'post', record.id], record);
       setSaved(next);
       setError('');
       toast({ title: next.status === 'published' ? 'Post published' : 'Draft saved', description: record.title });
+      if (record.warning) toast({ title: 'Some SEO fields were not saved', description: record.warning });
+      // Published, updated while published, or just unpublished: the public pages need a rebuild.
+      if (next.status === 'published' || wasPublic) void rebuildLiveSite();
       if (!id) navigate(`/posts/${record.id}`, { replace: true });
     },
     onError: (err) => setError(err instanceof Error ? err.message : 'Could not save.'),
@@ -97,6 +135,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'posts'] });
       toast({ title: 'Post deleted' });
+      if (saved.status === 'published') void rebuildLiveSite();
       navigate('/posts');
     },
   });
@@ -255,18 +294,6 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
               </div>
             </div>
             <label className="adm-field">
-              <span>URL slug</span>
-              <div className="adm-input-prefix">
-                <em>/blog/</em>
-                <input
-                  value={draft.slug}
-                  onChange={(e) => { setSlugTouched(true); set('slug', e.target.value); }}
-                  onBlur={() => set('slug', slugify(draft.slug))}
-                  placeholder="my-post"
-                />
-              </div>
-            </label>
-            <label className="adm-field">
               <span>Category</span>
               <select value={draft.category} onChange={(e) => set('category', e.target.value as PostCategory)}>
                 {postCategories.map((c) => <option key={c}>{c}</option>)}
@@ -278,7 +305,64 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
             </label>
           </div>
 
-          <CoverPicker value={draft.cover} onChange={(v) => set('cover', v)} />
+          <div className="adm-card adm-seo">
+            <div className="adm-seo-head">
+              <h3 className="adm-side-title">SEO</h3>
+              <SeoBadge result={seo} />
+            </div>
+            <label className="adm-field">
+              <span>Focus keyword <small>what people would type into Google</small></span>
+              <input
+                value={draft.focusKeyword}
+                onChange={(e) => set('focusKeyword', e.target.value)}
+                placeholder="e.g. learn python without a teacher"
+              />
+            </label>
+            <label className="adm-field">
+              <span className="adm-field-row">SEO title <CharCounter value={draft.seoTitle || draft.title} min={30} max={SEO_TITLE_MAX} /></span>
+              <input value={draft.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} placeholder={draft.title || 'Defaults to the post title'} />
+            </label>
+            <label className="adm-field">
+              <span className="adm-field-row">Meta description <CharCounter value={draft.metaDescription} min={META_MIN} max={META_MAX} /></span>
+              <textarea
+                rows={3}
+                value={draft.metaDescription}
+                onChange={(e) => set('metaDescription', e.target.value)}
+                placeholder="The 1–2 sentence summary Google shows under the title (140–160 characters)."
+              />
+            </label>
+            <label className="adm-field">
+              <span className="adm-field-row">URL slug <CharCounter value={draft.slug} max={60} /></span>
+              <div className="adm-input-prefix">
+                <em>/blog/</em>
+                <input
+                  value={draft.slug}
+                  onChange={(e) => { setSlugTouched(true); set('slug', e.target.value); }}
+                  onBlur={() => set('slug', slugify(draft.slug))}
+                  placeholder="my-post"
+                />
+              </div>
+              {id && saved.status === 'published' && draft.slug !== saved.slug && (
+                <small className="adm-seo-warn">Changing the slug of a published post breaks links to the old URL.</small>
+              )}
+            </label>
+            <GooglePreview
+              title={draft.seoTitle || draft.title}
+              description={draft.metaDescription || draft.excerpt || firstParagraph({ blocks })}
+              slug={draft.slug}
+              date={draft.date}
+            />
+            <SeoChecklist result={seo} />
+          </div>
+
+          <FaqEditor faqs={draft.faqs} onChange={(faqs) => set('faqs', faqs)} />
+
+          <CoverPicker
+            value={draft.cover}
+            onChange={(v) => set('cover', v)}
+            alt={draft.coverAlt}
+            onAltChange={(v) => set('coverAlt', v)}
+          />
 
           <div className="adm-card adm-help">
             <h3 className="adm-side-title">Formatting</h3>
@@ -287,6 +371,7 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
               <li><code>&gt; Quote</code></li>
               <li><code>- List item</code></li>
               <li><code>```js</code> … <code>```</code> code</li>
+              <li><code>[text](/blog/a-post)</code> link</li>
               <li>Blank line = new paragraph</li>
             </ul>
           </div>
@@ -305,7 +390,32 @@ function Editor({ id, initial }: { id?: string; initial: Draft }) {
   );
 }
 
-function CoverPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function FaqEditor({ faqs, onChange }: { faqs: BlogFaq[]; onChange: (faqs: BlogFaq[]) => void }) {
+  const update = (i: number, patch: Partial<BlogFaq>) => onChange(faqs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  return (
+    <div className="adm-card">
+      <h3 className="adm-side-title">FAQ <small className="adm-muted">shown at the end of the post · 3–4 is ideal</small></h3>
+      {faqs.map((f, i) => (
+        <div key={i} className="adm-faq-row">
+          <input value={f.question} onChange={(e) => update(i, { question: e.target.value })} placeholder="Question" aria-label={`Question ${i + 1}`} />
+          <textarea rows={2} value={f.answer} onChange={(e) => update(i, { answer: e.target.value })} placeholder="Answer" aria-label={`Answer ${i + 1}`} />
+          <button type="button" className="adm-icon-btn adm-icon-danger" onClick={() => onChange(faqs.filter((_, j) => j !== i))} aria-label={`Remove question ${i + 1}`}>
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ))}
+      {faqs.length < MAX_FAQS && (
+        <button type="button" className="adm-btn adm-btn-ghost" onClick={() => onChange([...faqs, { question: '', answer: '' }])}>
+          <Plus size={15} /> Add question
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CoverPicker({ value, onChange, alt, onAltChange }: {
+  value: string; onChange: (v: string) => void; alt: string; onAltChange: (v: string) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -365,6 +475,10 @@ function CoverPicker({ value, onChange }: { value: string; onChange: (v: string)
           inputMode="url"
         />
       </label>
+      <label className="adm-field">
+        <span>Alt text <small>describe the image for Google and screen readers</small></span>
+        <input value={alt} onChange={(e) => onAltChange(e.target.value)} placeholder="e.g. Laptop on a desk with Python code on screen" />
+      </label>
       {err && <p className="adm-form-error" role="alert">{err}</p>}
     </div>
   );
@@ -376,10 +490,10 @@ function Blocks({ blocks }: { blocks: BlogBlock[] }) {
       {blocks.map((b, i) => {
         switch (b.type) {
           case 'h2': return <h2 key={i} className="post-h2">{b.text}</h2>;
-          case 'quote': return <blockquote key={i} className="post-quote">{b.text}</blockquote>;
-          case 'list': return <ul key={i} className="post-list">{b.items.map((it, j) => <li key={j}>{it}</li>)}</ul>;
+          case 'quote': return <blockquote key={i} className="post-quote"><InlineText text={b.text} /></blockquote>;
+          case 'list': return <ul key={i} className="post-list">{b.items.map((it, j) => <li key={j}><InlineText text={it} /></li>)}</ul>;
           case 'code': return <pre key={i} className="post-code" data-lang={b.lang}><code>{b.text}</code></pre>;
-          default: return <p key={i} className="post-p">{b.text}</p>;
+          default: return <p key={i} className="post-p"><InlineText text={b.text} /></p>;
         }
       })}
     </>

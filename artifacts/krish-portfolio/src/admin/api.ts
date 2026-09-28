@@ -1,4 +1,4 @@
-import { blogPosts, type BlogPost } from '@/data/blog';
+import { blogPosts, type BlogPost, postFromRow } from '@/data/blog';
 import { projects as seedProjects } from '@/data/projects';
 import { tools as seedTools, stats as seedStats } from '@/data/skills';
 import { supabase } from '@/lib/supabase';
@@ -131,12 +131,15 @@ function demo_getPost(id: string) {
 }
 
 export type PostInput = Omit<AdminPost, 'id' | 'updatedAt'> & { id?: string };
+/** A saved post; `warning` is set when some optional columns couldn't be saved yet. */
+export type SavedPost = AdminPost & { warning?: string };
 
-async function demo_savePost(input: PostInput) {
+async function demo_savePost(input: PostInput): Promise<SavedPost> {
   const posts = db().posts;
   const clash = posts.find((p) => p.slug === input.slug && p.id !== input.id);
   if (clash) throw new Error(`Another post already uses the URL "${input.slug}".`);
-  const record: AdminPost = { ...input, id: input.id ?? uid(), updatedAt: now() };
+  const { updatedAt: _ignored, ...fields } = input as PostInput & { updatedAt?: string };
+  const record: AdminPost = { ...fields, id: input.id ?? uid(), updatedAt: now() };
   const i = posts.findIndex((p) => p.id === record.id);
   if (i >= 0) posts[i] = record;
   else posts.push(record);
@@ -347,6 +350,9 @@ export function resetDemoData() {
 type PostRow = {
   id: string; slug: string; title: string; excerpt: string; category: PostCategory;
   date: string; status: PostStatus; blocks: AdminPost['blocks']; updated_at: string; cover?: string | null;
+  // Optional until supabase/add-seo.sql has been run.
+  seo_title?: string | null; meta_description?: string | null; focus_keyword?: string | null;
+  faqs?: unknown; cover_alt?: string | null;
 };
 type MessageRow = { id: string; name: string; email: string; message: string; created_at: string; read: boolean };
 type ToolRow = { id: string; name: string; logo_url: string; sort_order: number };
@@ -356,8 +362,8 @@ type AutoPostSettingsRow = { publish_automatically: boolean };
 type AutoRunRow = { id: string; ran_at: string; topic: string; status: 'success' | 'failed'; message: string };
 
 const toPost = (r: PostRow): AdminPost => ({
-  id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt, category: r.category,
-  date: r.date, status: r.status, blocks: r.blocks, updatedAt: r.updated_at, cover: r.cover ?? '',
+  ...postFromRow(r as unknown as Record<string, unknown>),
+  id: r.id, status: r.status, updatedAt: r.updated_at,
 });
 const toMessage = (r: MessageRow): AdminMessage => ({
   id: r.id, name: r.name, email: r.email, message: r.message, createdAt: r.created_at, read: r.read,
@@ -396,6 +402,15 @@ function checkAutoPostsTable<T>(res: { data: T; error: { message: string; code?:
 
 const sb = () => supabase!;
 
+// Columns added by later SQL files; saving works without them (with a warning).
+const OPTIONAL_POST_COLUMNS = ['cover', 'seo_title', 'meta_description', 'focus_keyword', 'faqs', 'cover_alt'];
+
+// PostgREST: "Could not find the 'seo_title' column of 'posts' in the schema cache" (PGRST204);
+// Postgres: 'column "seo_title" of relation "posts" does not exist' (42703).
+function missingColumn(message: string) {
+  return message.match(/Could not find the '(\w+)' column/i)?.[1] ?? message.match(/column "?(\w+)"? (?:of relation "?\w+"? )?does not exist/i)?.[1];
+}
+
 const remote = {
   async listPosts() {
     const rows = check(await sb().from('posts').select('*').order('date', { ascending: false }));
@@ -405,17 +420,41 @@ const remote = {
     const row = check(await sb().from('posts').select('*').eq('id', id).maybeSingle());
     return row ? toPost(row as PostRow) : null;
   },
-  async savePost(input: PostInput) {
-    const { id, ...rest } = input;
-    const payload = { ...rest, updated_at: now() };
-    const res = id
-      ? await sb().from('posts').update(payload).eq('id', id).select().single()
-      : await sb().from('posts').insert(payload).select().single();
-    if (res.error?.code === '23505') throw new Error(`Another post already uses the URL "${input.slug}".`);
-    if (res.error && /cover/.test(res.error.message)) {
-      throw new Error('Cover images are not set up in the database yet. Run supabase/add-post-covers.sql in the Supabase SQL editor.');
+  async savePost(input: PostInput): Promise<SavedPost> {
+    const { id } = input;
+    const payload: Record<string, unknown> = {
+      slug: input.slug, title: input.title, excerpt: input.excerpt, category: input.category,
+      date: input.date, status: input.status, blocks: input.blocks, cover: input.cover ?? '', updated_at: now(),
+    };
+    // SEO fields are only written when the caller provides them, so an older caller can never blank them.
+    if (input.seoTitle !== undefined) payload.seo_title = input.seoTitle;
+    if (input.metaDescription !== undefined) payload.meta_description = input.metaDescription;
+    if (input.focusKeyword !== undefined) payload.focus_keyword = input.focusKeyword;
+    if (input.faqs !== undefined) payload.faqs = input.faqs;
+    if (input.coverAlt !== undefined) payload.cover_alt = input.coverAlt;
+
+    // A column that doesn't exist yet (SQL file not run) is dropped with a warning instead of
+    // failing the whole save — the post itself still saves.
+    const skipped: string[] = [];
+    for (;;) {
+      const res = id
+        ? await sb().from('posts').update(payload).eq('id', id).select().single()
+        : await sb().from('posts').insert(payload).select().single();
+      if (res.error?.code === '23505') throw new Error(`Another post already uses the URL "${input.slug}".`);
+      const missing = res.error ? missingColumn(res.error.message) : undefined;
+      if (missing && missing in payload && OPTIONAL_POST_COLUMNS.includes(missing)) {
+        console.warn(`[posts] Column "${missing}" doesn't exist yet — saving without it.`);
+        delete payload[missing];
+        skipped.push(missing);
+        continue;
+      }
+      const post: SavedPost = toPost(check(res) as PostRow);
+      if (skipped.length) {
+        const file = skipped.every((c) => c === 'cover') ? 'add-post-covers.sql' : 'add-seo.sql';
+        post.warning = `Saved, but without ${skipped.join(', ')} — run supabase/${file} in the Supabase SQL editor.`;
+      }
+      return post;
     }
-    return toPost(check(res) as PostRow);
   },
   async deletePost(id: string) {
     check(await sb().from('posts').delete().eq('id', id));
@@ -641,7 +680,7 @@ export const uploadCover = uploadImage;
 
 export const listPosts = () => (supabase ? remote.listPosts() : demo_listPosts());
 export const getPost = (id: string) => (supabase ? remote.getPost(id) : demo_getPost(id));
-export const savePost = (input: PostInput) => (supabase ? remote.savePost(input) : demo_savePost(input));
+export const savePost = (input: PostInput): Promise<SavedPost> => (supabase ? remote.savePost(input) : demo_savePost(input));
 export const deletePost = (id: string) => (supabase ? remote.deletePost(id) : demo_deletePost(id));
 export const listProjects = () => (supabase ? remote.listProjects() : demo_listProjects());
 export const saveProject = (input: Omit<AdminProject, 'id' | 'position'> & { id?: string }) =>
@@ -680,3 +719,32 @@ export const saveSettings = (settings: SiteSettings) =>
   supabase ? remote.saveSettings(settings) : demo_saveSettings(settings);
 
 export const defaultSettings = () => seed().settings;
+
+/* ================= Site rebuild (prerendered pages, sitemap, RSS) ================= */
+
+export type RebuildResult = { ok: boolean; message: string };
+
+/**
+ * Asks the server (api/rebuild.ts) to trigger the Vercel Deploy Hook so the public pages,
+ * sitemap.xml and rss.xml pick up a published/changed/removed post. The hook URL itself never
+ * reaches the browser; the server checks this admin's Supabase session first.
+ */
+export async function requestSiteRebuild(): Promise<RebuildResult> {
+  if (!supabase) return { ok: false, message: 'Demo mode — the live site is not rebuilt.' };
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { ok: false, message: 'Not signed in, so the site was not rebuilt.' };
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}api/rebuild`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
+    if (!isJson) return { ok: false, message: 'The rebuild endpoint only exists on the deployed site (not in local dev).' };
+    const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+    if (res.ok) return { ok: true, message: body.message ?? 'Site rebuild started.' };
+    return { ok: false, message: body.error ?? `Rebuild failed (HTTP ${res.status}).` };
+  } catch {
+    return { ok: false, message: 'Could not reach the rebuild endpoint.' };
+  }
+}

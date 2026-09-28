@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import BlogPage from '@/pages/blog';
 import BlogPostPage from '@/pages/blog-post';
+import ProjectsPage from '@/pages/projects';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
@@ -14,6 +15,8 @@ import { HeroParticles } from '@/components/hero-particles';
 import { sendContactMessage, useProjects, useSiteSettings, useStats, useTools } from '@/data/live';
 import { slugifyToolName, toolIconFor, type Tool } from '@/data/skills';
 import { toast } from '@/hooks/use-toast';
+import { homeMeta } from '@/seo/meta';
+import { useSeo } from '@/seo/use-seo';
 import AdminApp from '@/admin/admin-app';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
@@ -72,7 +75,7 @@ function ToolTile({ tool }: { tool: Tool }) {
   return (
     <span className={`tool-icon${showLogo ? ' has-logo' : !Icon ? ' is-letter' : ''}`}>
       {showLogo ? (
-        <img className="tool-logo-img" src={tool.logoUrl} alt="" onError={() => setBroken(true)} />
+        <img className="tool-logo-img" src={tool.logoUrl} alt={`${tool.name} logo`} loading="lazy" decoding="async" onError={() => setBroken(true)} />
       ) : Icon ? (
         <Icon size={40} strokeWidth={1.5} />
       ) : (
@@ -212,6 +215,8 @@ function Home() {
   const { data: toolList = [], isLoading: toolsLoading } = useTools();
   const { data: statList = [], isLoading: statsLoading } = useStats();
   const [sending, setSending] = useState(false);
+
+  useSeo(homeMeta(settings));
 
   // Arriving from another page with a #hash (e.g. /#contact from the blog): scroll to it once mounted.
   useEffect(() => {
@@ -376,7 +381,7 @@ function Home() {
               <span className="about-dot about-dot-2 about-in" style={{ transitionDelay: '0.55s' }} aria-hidden="true" />
               <span className="about-dot about-dot-3 about-in" style={{ transitionDelay: '0.65s' }} aria-hidden="true" />
               {settings.aboutPhoto ? (
-                <img className="about-photo-img" src={settings.aboutPhoto} alt="Krish" />
+                <img className="about-photo-img" src={settings.aboutPhoto} alt="Krish, aspiring software developer from Pundri, Haryana" loading="lazy" decoding="async" />
               ) : (
                 <span>Professional photo placeholder</span>
               )}
@@ -462,7 +467,7 @@ function Home() {
           <div className="project-list" data-testid="list-projects">
             {projectList.map((project) => (
               <article className="project-row reveal" data-tilt key={project.number} data-testid={`card-project-${project.number}`}>
-                {project.image && <img className="project-thumb" src={project.image} alt="" aria-hidden="true" />}
+                {project.image && <img className="project-thumb" src={project.image} alt={`${project.name} screenshot`} loading="lazy" decoding="async" />}
                 <div className="project-number">{project.number}</div>
                 <div className="project-name">{project.name}</div>
                 <div className="project-description">{project.description}</div>
@@ -604,6 +609,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/blog" component={BlogPage} />
         <Route path="/blog/:slug" component={BlogPostPage} />
+        <Route path="/projects" component={ProjectsPage} />
         <Route path="/admin" nest component={AdminApp} />
         <Route component={NotFound} />
       </Switch>

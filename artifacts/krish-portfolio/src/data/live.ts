@@ -1,43 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { blogPosts, type BlogPost, withCover } from './blog';
+import { blogPosts, type BlogPost, postFromRow, withCover } from './blog';
 import { projects as staticProjects, type Project } from './projects';
+import { defaultPublicSettings, type PublicSettings } from './settings';
 import { stats as staticStats, type Stat, tools as staticTools, type Tool } from './skills';
+
+export { defaultPublicSettings, type PublicSettings };
 
 /*
  * Public-site data. With Supabase configured, content comes from the database (what the admin
  * panel edits). Without it, the static files in src/data are used.
  */
-
-export type PublicSettings = {
-  name: string;
-  tagline: string;
-  email: string;
-  phone: string;
-  location: string;
-  roles: string[];
-  instagram: string;
-  linkedin: string;
-  youtube: string;
-  github: string;
-  heroImage: string;
-  aboutPhoto: string;
-};
-
-export const defaultPublicSettings: PublicSettings = {
-  name: 'Krish',
-  tagline: "I'm passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.",
-  email: 'dhimankrish10@gmail.com',
-  phone: '+91 93060 91154',
-  location: 'Pundri, Kaithal, Haryana, India',
-  roles: ['Web Developer', 'Digital Marketer', 'AI Enthusiast'],
-  instagram: 'https://instagram.com',
-  linkedin: 'https://www.linkedin.com',
-  youtube: 'https://youtube.com',
-  github: 'https://github.com/KRRISH972',
-  heroImage: '',
-  aboutPhoto: '',
-};
 
 const staticPosts = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date)).map(withCover);
 
@@ -48,11 +21,11 @@ export function usePublishedPosts() {
       if (!supabase) return staticPosts;
       const { data, error } = await supabase
         .from('posts')
-        .select('*') // '*' so the query keeps working whether or not the optional cover column exists yet
+        .select('*') // '*' so the query keeps working whether or not optional columns (cover, SEO fields) exist yet
         .eq('status', 'published')
         .order('date', { ascending: false });
       if (error) throw error;
-      return (data as BlogPost[]).map(withCover);
+      return (data as Record<string, unknown>[]).map((row) => withCover(postFromRow(row)));
     },
     initialData: supabase ? undefined : staticPosts,
     staleTime: 60_000,
