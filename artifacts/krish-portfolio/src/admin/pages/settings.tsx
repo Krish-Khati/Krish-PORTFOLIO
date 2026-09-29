@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Database, Eye, EyeOff, KeyRound, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { type Ticker, type TickerIcon, tickerIcons } from '@/data/ticker';
+import type { Ticker } from '@/data/ticker';
 import { useAdminAuth } from '../auth';
 import {
   getSettings, getTicker, isSupabaseConnected, requestSiteRebuild, resetDemoData, saveSettings, saveTicker, type SiteSettings,
@@ -169,19 +169,15 @@ export default function SettingsPage() {
   );
 }
 
-type DraftItem = { key: string; id?: string; label: string; icon: TickerIcon };
-type Draft = { items: DraftItem[]; showSecondRow: boolean; secondRow: string[] };
+type DraftItem = { key: string; id?: string; label: string };
+type Draft = { items: DraftItem[] };
 
 const toDraft = (t: Ticker): Draft => ({
-  items: t.items.map((i) => ({ key: i.id, id: i.id, label: i.label, icon: i.icon })),
-  showSecondRow: t.showSecondRow,
-  secondRow: [...t.secondRow],
+  items: t.items.map((i) => ({ key: i.id, id: i.id, label: i.label })),
 });
 // What gets saved — also used to tell whether anything changed.
 const toInput = (d: Draft) => ({
-  items: d.items.map(({ id, label, icon }) => ({ id, label: label.trim(), icon })).filter((i) => i.label),
-  showSecondRow: d.showSecondRow,
-  secondRow: d.secondRow,
+  items: d.items.map(({ id, label }) => ({ id, label: label.trim() })).filter((i) => i.label),
 });
 const newKey = () => `new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -190,8 +186,6 @@ function TickerCard() {
   const { data, isLoading, error } = useQuery({ queryKey: ['admin', 'ticker'], queryFn: getTicker, retry: false });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [newLabel, setNewLabel] = useState('');
-  const [newIcon, setNewIcon] = useState<TickerIcon>('');
-  const [newWord, setNewWord] = useState('');
 
   useEffect(() => {
     if (data) setDraft(toDraft(data));
@@ -211,7 +205,7 @@ function TickerCard() {
   const header = (
     <>
       <h2 className="adm-section-title">Ticker</h2>
-      <p className="adm-muted adm-small">The scrolling band under the hero. Items scroll in this order; icons are optional.</p>
+      <p className="adm-muted adm-small">The scrolling band under the hero. Items scroll in this order.</p>
     </>
   );
 
@@ -239,14 +233,8 @@ function TickerCard() {
   const addItem = () => {
     const label = newLabel.trim();
     if (!label) return;
-    setItems([...draft.items, { key: newKey(), label, icon: newIcon }]);
+    setItems([...draft.items, { key: newKey(), label }]);
     setNewLabel('');
-    setNewIcon('');
-  };
-  const addWord = () => {
-    const w = newWord.trim();
-    if (w && !draft.secondRow.includes(w)) setDraft({ ...draft, secondRow: [...draft.secondRow, w] });
-    setNewWord('');
   };
 
   const input = toInput(draft);
@@ -278,9 +266,6 @@ function TickerCard() {
                 placeholder="Item text"
                 aria-label={`Ticker item ${i + 1}`}
               />
-              <select value={item.icon} onChange={(e) => update(item.key, { icon: e.target.value as TickerIcon })} aria-label={`Icon for ${item.label || `item ${i + 1}`}`}>
-                {tickerIcons.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
               <div className="adm-row-actions">
                 <button type="button" className="adm-icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up"><ArrowUp size={14} /></button>
                 <button type="button" className="adm-icon-btn" disabled={i === draft.items.length - 1} onClick={() => move(i, 1)} aria-label="Move down"><ArrowDown size={14} /></button>
@@ -301,37 +286,8 @@ function TickerCard() {
           placeholder="New item, e.g. TYPESCRIPT"
           aria-label="New ticker item"
         />
-        <select value={newIcon} onChange={(e) => setNewIcon(e.target.value as TickerIcon)} aria-label="Icon for the new item">
-          {tickerIcons.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
         <button type="button" className="adm-icon-btn" onClick={addItem} disabled={!newLabel.trim()} aria-label="Add ticker item"><Plus size={16} /></button>
       </div>
-
-      <h3 className="adm-ticker-sub">Second row <span className="adm-muted adm-small">— thinner, scrolls the other way, desktop only</span></h3>
-      <div className="adm-seg adm-seg-full" style={{ maxWidth: 360 }}>
-        <button type="button" className={!draft.showSecondRow ? 'is-active' : ''} onClick={() => setDraft({ ...draft, showSecondRow: false })}>Off</button>
-        <button type="button" className={draft.showSecondRow ? 'is-active' : ''} onClick={() => setDraft({ ...draft, showSecondRow: true })}>On</button>
-      </div>
-      {draft.showSecondRow && (
-        <div className="adm-roles" style={{ marginTop: 12 }}>
-          {draft.secondRow.map((w) => (
-            <span key={w} className="adm-role">
-              {w}
-              <button type="button" onClick={() => setDraft({ ...draft, secondRow: draft.secondRow.filter((x) => x !== w) })} aria-label={`Remove ${w}`}><X size={13} /></button>
-            </span>
-          ))}
-          <span className="adm-role-add">
-            <input
-              value={newWord}
-              onChange={(e) => setNewWord(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWord(); } }}
-              placeholder="Add a word…"
-              aria-label="New second-row word"
-            />
-            <button type="button" className="adm-icon-btn" onClick={addWord} aria-label="Add word"><Plus size={15} /></button>
-          </span>
-        </div>
-      )}
     </section>
   );
 }

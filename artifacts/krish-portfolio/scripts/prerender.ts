@@ -78,14 +78,11 @@ async function loadData(): Promise<SiteData> {
   if (settingsRes.error) console.warn(`[prerender] Could not load site settings (${settingsRes.error.message}) — using defaults.`);
   else settings = { ...defaultPublicSettings, ...((settingsRes.data?.data as Partial<PublicSettings>) ?? {}) };
 
-  // The ticker tables come from add-ticker.sql; until it's run, the default items are used.
+  // The ticker table comes from add-ticker.sql; until it's run, the default items are used.
   let ticker = fallback.ticker;
-  const [tickerItems, tickerSettings] = await Promise.all([
-    sb.from('ticker_items').select('id, label, icon').order('sort_order'),
-    sb.from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
-  ]);
+  const tickerItems = await sb.from('ticker_items').select('id, label').order('sort_order');
   if (tickerItems.error) console.warn(`[prerender] Could not load ticker items (${tickerItems.error.message}) — using the defaults.`);
-  else ticker = tickerFromRows(tickerItems.data ?? [], tickerSettings.error ? null : tickerSettings.data);
+  else ticker = tickerFromRows(tickerItems.data ?? []);
 
   return { posts, projects, settings, ticker };
 }

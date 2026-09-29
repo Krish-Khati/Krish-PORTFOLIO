@@ -297,40 +297,44 @@ button { font: inherit; }
 .about-fade-right { transform: translateX(30px); }
 .about-rise { transform: translateY(30px); }
 .about-in.is-visible { opacity: 1; transform: none; }
-/* Hero ticker — seamless marquee (see components/hero-ticker.tsx) */
+/* Hero ticker — one slim, quiet marquee row (see components/hero-ticker.tsx) */
 .ticker {
-  --ticker-gap: 30px; --ticker-fade: 7%;
-  overflow: hidden; border-top: 1px solid #263b3d; border-bottom: 1px solid #263b3d; background: #0b1b1d;
-  color: #d8f36a; font-family: var(--app-font-mono); text-transform: uppercase;
+  --ticker-gap: 26px; --ticker-fade: 8%;
+  overflow: hidden; background: #0d0d0d;
+  border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06);
+  color: #8f9a97; font-family: var(--app-font-mono); text-transform: uppercase;
 }
 .ticker-row {
-  overflow: hidden;
+  display: flex; align-items: center; height: 46px; overflow: hidden;
+  font-size: 12.5px; letter-spacing: .22em;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--ticker-fade), #000 calc(100% - var(--ticker-fade)), transparent);
   mask-image: linear-gradient(90deg, transparent, #000 var(--ticker-fade), #000 calc(100% - var(--ticker-fade)), transparent);
 }
-.ticker-row-main { padding: 17px 0; font-size: 12px; letter-spacing: .13em; }
-.ticker-row-sub { padding: 9px 0; border-top: 1px solid rgba(38,59,61,.6); font-size: 10px; letter-spacing: .3em; opacity: .5; }
-.ticker-track { display: flex; width: max-content; animation: tickerScroll var(--ticker-duration, 40s) linear infinite; transition: opacity .5s ease; }
-.ticker-track.is-reverse { animation-direction: reverse; }
+.ticker-track { display: flex; width: max-content; animation: tickerScroll var(--ticker-duration, 60s) linear infinite; transition: opacity .5s ease; }
 .ticker.is-loading .ticker-track { opacity: 0; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 .ticker-group, .ticker-set { display: flex; flex-shrink: 0; }
-.ticker-item { display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.2; }
-.ticker-icon { flex-shrink: 0; margin-right: 9px; }
-.ticker-dot { margin: 0 var(--ticker-gap); }
+.ticker-item { display: inline-flex; align-items: center; white-space: nowrap; line-height: 1; }
+/* letter-spacing leaves a trailing gap after the last letter; the separator's left margin absorbs it
+   so the star sits visually centred between two items. */
+.ticker-sep {
+  flex-shrink: 0; width: 7px; height: 7px; fill: #2ecc71; opacity: .75;
+  margin: 0 var(--ticker-gap) 0 calc(var(--ticker-gap) - .22em);
+}
 @keyframes tickerScroll { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+.ticker + .intro-section { padding-top: 64px; }
 @media (max-width: 767px) {
-  .ticker { --ticker-gap: 16px; --ticker-fade: 10%; }
-  .ticker-row-main { padding: 13px 0; font-size: 10.5px; letter-spacing: .11em; }
-  .ticker-row-sub { display: none; }
-  .ticker-icon { width: 11px; height: 11px; margin-right: 7px; }
+  .ticker { --ticker-gap: 18px; --ticker-fade: 10%; }
+  .ticker-row { height: 44px; font-size: 12px; letter-spacing: .18em; }
+  .ticker-sep { width: 6px; height: 6px; margin-left: calc(var(--ticker-gap) - .18em); }
+  .ticker + .intro-section { padding-top: 56px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ticker-row { padding-left: 16px; padding-right: 16px; -webkit-mask-image: none; mask-image: none; }
+  .ticker-row { height: auto; min-height: 46px; padding: 12px 16px; -webkit-mask-image: none; mask-image: none; }
   .ticker-track { width: auto; justify-content: center; animation: none !important; transform: none; }
-  .ticker-group + .ticker-group, .ticker-set + .ticker-set, .ticker-row-sub { display: none; }
-  .ticker-group, .ticker-set { flex-shrink: 1; min-width: 0; flex-wrap: wrap; justify-content: center; row-gap: 10px; }
-  .ticker-item:last-child .ticker-dot { display: none; }
+  .ticker-group + .ticker-group, .ticker-set + .ticker-set { display: none; }
+  .ticker-group, .ticker-set { flex-shrink: 1; min-width: 0; flex-wrap: wrap; justify-content: center; row-gap: 12px; }
+  .ticker-item:last-child .ticker-sep { display: none; }
 }
 
 .projects-heading { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin-bottom: 64px; }

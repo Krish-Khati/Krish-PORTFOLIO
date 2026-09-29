@@ -1,7 +1,7 @@
 import { blogPosts, type BlogPost, postFromRow } from '@/data/blog';
 import { type Project, projectFromRow, projects as seedProjects } from '@/data/projects';
 import { tools as seedTools, stats as seedStats } from '@/data/skills';
-import { defaultTicker, type Ticker, type TickerIcon, toTickerIcon } from '@/data/ticker';
+import { defaultTicker, type Ticker } from '@/data/ticker';
 import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 /*
@@ -24,7 +24,7 @@ export type SavedProject = AdminProject & { warning?: string };
 export type AdminTool = { id: string; name: string; logoUrl: string; position: number };
 export type AdminStat = { id: string; value: string; label: string; position: number };
 /** Ticker items as the admin edits them; items without an `id` are new. */
-export type TickerInput = { items: { id?: string; label: string; icon: TickerIcon }[]; showSecondRow: boolean; secondRow: string[] };
+export type TickerInput = { items: { id?: string; label: string }[] };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
 export type TopicStatus = 'pending' | 'used';
 export type AdminTopic = { id: string; title: string; notes: string; category: PostCategory; status: TopicStatus; position: number };
@@ -365,11 +365,12 @@ function demo_listAutoRuns() {
 /* ---------- Ticker ---------- */
 
 function demo_getTicker() {
-  return delay(db().ticker ?? defaultTicker);
+  const saved = db().ticker;
+  return delay<Ticker>(saved ? { items: saved.items.map(({ id, label }) => ({ id, label })) } : defaultTicker);
 }
 
 function demo_saveTicker(input: TickerInput) {
-  db().ticker = { ...input, items: input.items.map((i) => ({ ...i, id: i.id ?? uid() })) };
+  db().ticker = { items: input.items.map((i) => ({ label: i.label, id: i.id ?? uid() })) };
   commit();
   return delay(true);
 }
@@ -723,30 +724,20 @@ const remote = {
     return (rows as AutoRunRow[]).map(toRun);
   },
   async getTicker(): Promise<Ticker> {
-    const [items, settings] = await Promise.all([
-      sb().from('ticker_items').select('id, label, icon').order('sort_order'),
-      sb().from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
-    ]);
-    const rows = checkTickerTable(items) as { id: string; label: string; icon: string }[];
-    const s = checkTickerTable(settings) as { show_second_row: boolean; second_row: string[] } | null;
-    return {
-      items: rows.map((r) => ({ id: r.id, label: r.label, icon: toTickerIcon(r.icon) })),
-      showSecondRow: s?.show_second_row ?? defaultTicker.showSecondRow,
-      secondRow: s?.second_row ?? defaultTicker.secondRow,
-    };
+    const rows = checkTickerTable(await sb().from('ticker_items').select('id, label').order('sort_order')) as { id: string; label: string }[];
+    return { items: rows.map((r) => ({ id: r.id, label: r.label })) };
   },
   async saveTicker(input: TickerInput) {
-    // Remove deleted items, then write every item's text/icon/order, then the second-row settings.
+    // Remove deleted items, then write every item's text and order.
     const existing = checkTickerTable(await sb().from('ticker_items').select('id')) as { id: string }[];
     const kept = new Set(input.items.map((i) => i.id).filter(Boolean));
     const removed = existing.map((r) => r.id).filter((id) => !kept.has(id));
     if (removed.length) checkTickerTable(await sb().from('ticker_items').delete().in('id', removed));
-    const rows = input.items.map((item, i) => ({ id: item.id, label: item.label, icon: item.icon, sort_order: i }));
+    const rows = input.items.map((item, i) => ({ id: item.id, label: item.label, sort_order: i }));
     const updates = rows.filter((r) => r.id);
     const inserts = rows.filter((r) => !r.id).map(({ id: _new, ...r }) => r);
     if (updates.length) checkTickerTable(await sb().from('ticker_items').upsert(updates));
     if (inserts.length) checkTickerTable(await sb().from('ticker_items').insert(inserts));
-    checkTickerTable(await sb().from('ticker_settings').upsert({ id: 1, show_second_row: input.showSecondRow, second_row: input.secondRow }));
     return true;
   },
   async listMessages() {

@@ -96,12 +96,9 @@ export function useTicker() {
     queryFn: async (): Promise<Ticker> => {
       if (!supabase) return defaultTicker;
       try {
-        const [items, settings] = await Promise.all([
-          supabase.from('ticker_items').select('id, label, icon').order('sort_order'),
-          supabase.from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
-        ]);
+        const items = await supabase.from('ticker_items').select('id, label').order('sort_order');
         if (items.error) throw items.error;
-        return tickerFromRows(items.data ?? [], settings.error ? null : settings.data);
+        return tickerFromRows(items.data ?? []);
       } catch {
         return defaultTicker;
       }
