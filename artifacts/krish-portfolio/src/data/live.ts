@@ -4,6 +4,7 @@ import { blogPosts, type BlogPost, postFromRow, withCover } from './blog';
 import { projectFromRow, projects as staticProjects, type Project } from './projects';
 import { defaultPublicSettings, type PublicSettings } from './settings';
 import { stats as staticStats, type Stat, tools as staticTools, type Tool } from './skills';
+import { defaultTicker, type Ticker, tickerFromRows } from './ticker';
 
 export { defaultPublicSettings, type PublicSettings };
 
@@ -83,6 +84,30 @@ export function useStats() {
       }
     },
     initialData: supabase ? undefined : staticStats,
+    staleTime: 60_000,
+  });
+}
+
+// The hero ticker falls back to the default items on ANY failure (including the ticker tables
+// not existing yet). The defaults stand in while loading so the band keeps its height.
+export function useTicker() {
+  return useQuery({
+    queryKey: ['public', 'ticker'],
+    queryFn: async (): Promise<Ticker> => {
+      if (!supabase) return defaultTicker;
+      try {
+        const [items, settings] = await Promise.all([
+          supabase.from('ticker_items').select('id, label, icon').order('sort_order'),
+          supabase.from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
+        ]);
+        if (items.error) throw items.error;
+        return tickerFromRows(items.data ?? [], settings.error ? null : settings.data);
+      } catch {
+        return defaultTicker;
+      }
+    },
+    initialData: supabase ? undefined : defaultTicker,
+    placeholderData: defaultTicker,
     staleTime: 60_000,
   });
 }

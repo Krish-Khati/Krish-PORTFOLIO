@@ -15,6 +15,7 @@ import { homeProjects } from '@/data/projects';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
 import { HeroParticles } from '@/components/hero-particles';
+import { HeroTicker } from '@/components/hero-ticker';
 import { sendContactMessage, useProjects, useSiteSettings, useStats, useTools } from '@/data/live';
 import { slugifyToolName, toolIconFor, type Tool } from '@/data/skills';
 import { toast } from '@/hooks/use-toast';
@@ -352,13 +353,7 @@ function Home() {
         </div>
       </section>
 
-      <div className="marquee-wrap" aria-label="Krish focus areas">
-        <div className="marquee">
-          <span>Python</span><span>•</span><span>Web experiments</span><span>•</span><span>Logic first</span><span>•</span>
-          <span>Always building</span><span>•</span><span>Python</span><span>•</span><span>Web experiments</span><span>•</span>
-          <span>Logic first</span><span>•</span><span>Always building</span><span>•</span>
-        </div>
-      </div>
+      <HeroTicker />
 
       <section className="section intro-section" id="about">
         <div className="section-inner about-layout">

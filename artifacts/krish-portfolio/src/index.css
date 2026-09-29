@@ -297,9 +297,41 @@ button { font: inherit; }
 .about-fade-right { transform: translateX(30px); }
 .about-rise { transform: translateY(30px); }
 .about-in.is-visible { opacity: 1; transform: none; }
-.marquee-wrap { overflow: hidden; border-top: 1px solid #263b3d; border-bottom: 1px solid #263b3d; background: #0b1b1d; }
-.marquee { display: flex; width: max-content; padding: 17px 0; color: #d8f36a; font-family: var(--app-font-mono); font-size: 12px; letter-spacing: .13em; text-transform: uppercase; animation: marquee 28s linear infinite; }
-.marquee span { padding: 0 28px; }
+/* Hero ticker — seamless marquee (see components/hero-ticker.tsx) */
+.ticker {
+  --ticker-gap: 30px; --ticker-fade: 7%;
+  overflow: hidden; border-top: 1px solid #263b3d; border-bottom: 1px solid #263b3d; background: #0b1b1d;
+  color: #d8f36a; font-family: var(--app-font-mono); text-transform: uppercase;
+}
+.ticker-row {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--ticker-fade), #000 calc(100% - var(--ticker-fade)), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--ticker-fade), #000 calc(100% - var(--ticker-fade)), transparent);
+}
+.ticker-row-main { padding: 17px 0; font-size: 12px; letter-spacing: .13em; }
+.ticker-row-sub { padding: 9px 0; border-top: 1px solid rgba(38,59,61,.6); font-size: 10px; letter-spacing: .3em; opacity: .5; }
+.ticker-track { display: flex; width: max-content; animation: tickerScroll var(--ticker-duration, 40s) linear infinite; transition: opacity .5s ease; }
+.ticker-track.is-reverse { animation-direction: reverse; }
+.ticker.is-loading .ticker-track { opacity: 0; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
+.ticker-group, .ticker-set { display: flex; flex-shrink: 0; }
+.ticker-item { display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.2; }
+.ticker-icon { flex-shrink: 0; margin-right: 9px; }
+.ticker-dot { margin: 0 var(--ticker-gap); }
+@keyframes tickerScroll { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+@media (max-width: 767px) {
+  .ticker { --ticker-gap: 16px; --ticker-fade: 10%; }
+  .ticker-row-main { padding: 13px 0; font-size: 10.5px; letter-spacing: .11em; }
+  .ticker-row-sub { display: none; }
+  .ticker-icon { width: 11px; height: 11px; margin-right: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-row { padding-left: 16px; padding-right: 16px; -webkit-mask-image: none; mask-image: none; }
+  .ticker-track { width: auto; justify-content: center; animation: none !important; transform: none; }
+  .ticker-group + .ticker-group, .ticker-set + .ticker-set, .ticker-row-sub { display: none; }
+  .ticker-group, .ticker-set { flex-shrink: 1; min-width: 0; flex-wrap: wrap; justify-content: center; row-gap: 10px; }
+  .ticker-item:last-child .ticker-dot { display: none; }
+}
 
 .projects-heading { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin-bottom: 64px; }
 .projects-heading p { max-width: 270px; margin: 0; color: #849391; font-family: var(--app-font-mono); font-size: 11px; line-height: 1.65; }
@@ -570,7 +602,6 @@ button { font: inherit; }
 .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.8,.2,1); }
 .reveal.is-visible { opacity: 1; transform: translateY(0); }
 .reveal-delay-1 { transition-delay: .1s; } .reveal-delay-2 { transition-delay: .2s; } .reveal-delay-3 { transition-delay: .3s; }
-@keyframes marquee { to { transform: translateX(-50%); } }
 
 /* ---------- Site-wide motion ---------- */
 .scroll-progress {
@@ -620,7 +651,6 @@ button { font: inherit; }
 @keyframes btnSheen { 0% { left: -60%; } 30%, 100% { left: 130%; } }
 
 /* Extra life on existing sections */
-.marquee-wrap:hover .marquee { animation-play-state: paused; }
 .tool-icon { position: relative; isolation: isolate; }
 .tool-item:hover .tool-icon { animation: iconWiggle .6s ease; }
 @keyframes iconWiggle { 0%, 100% { rotate: 0deg; } 25% { rotate: -8deg; } 60% { rotate: 6deg; } }

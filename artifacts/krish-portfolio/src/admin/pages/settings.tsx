@@ -1,10 +1,18 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Eye, EyeOff, KeyRound, Plus, RotateCcw, Save, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Database, Eye, EyeOff, KeyRound, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { type Ticker, type TickerIcon, tickerIcons } from '@/data/ticker';
 import { useAdminAuth } from '../auth';
-import { getSettings, isSupabaseConnected, resetDemoData, saveSettings, type SiteSettings } from '../api';
+import {
+  getSettings, getTicker, isSupabaseConnected, requestSiteRebuild, resetDemoData, saveSettings, saveTicker, type SiteSettings,
+} from '../api';
 import { ConfirmDialog, PageHeader, Skeleton } from '../ui';
+
+async function rebuildLiveSite() {
+  const r = await requestSiteRebuild();
+  toast({ title: r.ok ? 'Updating the live site' : 'Live site not rebuilt', description: r.message });
+}
 
 const socialFields: { key: keyof SiteSettings; label: string }[] = [
   { key: 'instagram', label: 'Instagram' },
@@ -117,6 +125,8 @@ export default function SettingsPage() {
         </section>
       </form>
 
+      <TickerCard />
+
       <PasswordCard />
 
       <section className="adm-card adm-rise adm-supabase" style={{ animationDelay: '.18s' }}>
@@ -156,6 +166,173 @@ export default function SettingsPage() {
         onClose={() => setConfirmReset(false)}
       />
     </div>
+  );
+}
+
+type DraftItem = { key: string; id?: string; label: string; icon: TickerIcon };
+type Draft = { items: DraftItem[]; showSecondRow: boolean; secondRow: string[] };
+
+const toDraft = (t: Ticker): Draft => ({
+  items: t.items.map((i) => ({ key: i.id, id: i.id, label: i.label, icon: i.icon })),
+  showSecondRow: t.showSecondRow,
+  secondRow: [...t.secondRow],
+});
+// What gets saved — also used to tell whether anything changed.
+const toInput = (d: Draft) => ({
+  items: d.items.map(({ id, label, icon }) => ({ id, label: label.trim(), icon })).filter((i) => i.label),
+  showSecondRow: d.showSecondRow,
+  secondRow: d.secondRow,
+});
+const newKey = () => `new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+function TickerCard() {
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useQuery({ queryKey: ['admin', 'ticker'], queryFn: getTicker, retry: false });
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [newLabel, setNewLabel] = useState('');
+  const [newIcon, setNewIcon] = useState<TickerIcon>('');
+  const [newWord, setNewWord] = useState('');
+
+  useEffect(() => {
+    if (data) setDraft(toDraft(data));
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: saveTicker,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'ticker'] });
+      qc.invalidateQueries({ queryKey: ['public', 'ticker'] });
+      toast({ title: 'Ticker saved' });
+      void rebuildLiveSite();
+    },
+    onError: (err) => toast({ title: 'Could not save the ticker', description: err instanceof Error ? err.message : undefined }),
+  });
+
+  const header = (
+    <>
+      <h2 className="adm-section-title">Ticker</h2>
+      <p className="adm-muted adm-small">The scrolling band under the hero. Items scroll in this order; icons are optional.</p>
+    </>
+  );
+
+  if (error) {
+    return (
+      <section className="adm-card adm-rise" style={{ animationDelay: '.14s' }}>
+        {header}
+        <p className="adm-form-error" role="alert">{error instanceof Error ? error.message : 'Could not load the ticker.'}</p>
+        <p className="adm-muted adm-small">Until then, the site shows the default items.</p>
+      </section>
+    );
+  }
+  if (isLoading || !draft || !data) {
+    return <section className="adm-card adm-rise" style={{ animationDelay: '.14s' }}>{header}<Skeleton rows={4} /></section>;
+  }
+
+  const setItems = (items: DraftItem[]) => setDraft({ ...draft, items });
+  const update = (key: string, patch: Partial<DraftItem>) =>
+    setItems(draft.items.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const move = (index: number, dir: -1 | 1) => {
+    const items = [...draft.items];
+    [items[index], items[index + dir]] = [items[index + dir], items[index]];
+    setItems(items);
+  };
+  const addItem = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    setItems([...draft.items, { key: newKey(), label, icon: newIcon }]);
+    setNewLabel('');
+    setNewIcon('');
+  };
+  const addWord = () => {
+    const w = newWord.trim();
+    if (w && !draft.secondRow.includes(w)) setDraft({ ...draft, secondRow: [...draft.secondRow, w] });
+    setNewWord('');
+  };
+
+  const input = toInput(draft);
+  const dirty = JSON.stringify(input) !== JSON.stringify(toInput(toDraft(data)));
+
+  return (
+    <section className="adm-card adm-rise" style={{ animationDelay: '.14s' }}>
+      <div className="adm-section-head">
+        <div>{header}</div>
+        <div className="adm-row-actions">
+          {dirty && (
+            <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setDraft(toDraft(data))} disabled={save.isPending}>
+              Discard
+            </button>
+          )}
+          <button type="button" className="adm-btn adm-btn-primary" disabled={!dirty || save.isPending} onClick={() => save.mutate(input)}>
+            <Save size={16} /> {save.isPending ? 'Saving…' : 'Save ticker'}
+          </button>
+        </div>
+      </div>
+
+      {draft.items.length ? (
+        <div className="adm-stat-list">
+          {draft.items.map((item, i) => (
+            <div key={item.key} className="adm-stat-row adm-ticker-row">
+              <input
+                value={item.label}
+                onChange={(e) => update(item.key, { label: e.target.value })}
+                placeholder="Item text"
+                aria-label={`Ticker item ${i + 1}`}
+              />
+              <select value={item.icon} onChange={(e) => update(item.key, { icon: e.target.value as TickerIcon })} aria-label={`Icon for ${item.label || `item ${i + 1}`}`}>
+                {tickerIcons.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <div className="adm-row-actions">
+                <button type="button" className="adm-icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up"><ArrowUp size={14} /></button>
+                <button type="button" className="adm-icon-btn" disabled={i === draft.items.length - 1} onClick={() => move(i, 1)} aria-label="Move down"><ArrowDown size={14} /></button>
+                <button type="button" className="adm-icon-btn adm-icon-danger" onClick={() => setItems(draft.items.filter((x) => x.key !== item.key))} aria-label={`Delete ${item.label}`}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="adm-muted adm-small" style={{ marginTop: 14 }}>No items — the site will show the default list until you add some.</p>
+      )}
+
+      <div className="adm-stat-add adm-ticker-row">
+        <input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+          placeholder="New item, e.g. TYPESCRIPT"
+          aria-label="New ticker item"
+        />
+        <select value={newIcon} onChange={(e) => setNewIcon(e.target.value as TickerIcon)} aria-label="Icon for the new item">
+          {tickerIcons.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button type="button" className="adm-icon-btn" onClick={addItem} disabled={!newLabel.trim()} aria-label="Add ticker item"><Plus size={16} /></button>
+      </div>
+
+      <h3 className="adm-ticker-sub">Second row <span className="adm-muted adm-small">— thinner, scrolls the other way, desktop only</span></h3>
+      <div className="adm-seg adm-seg-full" style={{ maxWidth: 360 }}>
+        <button type="button" className={!draft.showSecondRow ? 'is-active' : ''} onClick={() => setDraft({ ...draft, showSecondRow: false })}>Off</button>
+        <button type="button" className={draft.showSecondRow ? 'is-active' : ''} onClick={() => setDraft({ ...draft, showSecondRow: true })}>On</button>
+      </div>
+      {draft.showSecondRow && (
+        <div className="adm-roles" style={{ marginTop: 12 }}>
+          {draft.secondRow.map((w) => (
+            <span key={w} className="adm-role">
+              {w}
+              <button type="button" onClick={() => setDraft({ ...draft, secondRow: draft.secondRow.filter((x) => x !== w) })} aria-label={`Remove ${w}`}><X size={13} /></button>
+            </span>
+          ))}
+          <span className="adm-role-add">
+            <input
+              value={newWord}
+              onChange={(e) => setNewWord(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWord(); } }}
+              placeholder="Add a word…"
+              aria-label="New second-row word"
+            />
+            <button type="button" className="adm-icon-btn" onClick={addWord} aria-label="Add word"><Plus size={15} /></button>
+          </span>
+        </div>
+      )}
+    </section>
   );
 }
 

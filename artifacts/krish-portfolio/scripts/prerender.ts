@@ -5,6 +5,7 @@ import { loadEnv } from 'vite';
 import { blogPosts, type BlogBlock, type BlogPost, formatPostDate, postFromRow, readingMinutes, withCover } from '../src/data/blog';
 import { imageAlt, type Project, projectFromRow, projectPath, projects as staticProjects } from '../src/data/projects';
 import { defaultPublicSettings, type PublicSettings } from '../src/data/settings';
+import { defaultTicker, type Ticker, tickerFromRows } from '../src/data/ticker';
 import { textToBlocks } from '../src/lib/text-blocks';
 import { escapeHtml, inlineToHtml } from '../src/seo/inline';
 import {
@@ -36,13 +37,14 @@ const root = path.resolve(import.meta.dirname, '..');
 const outDir = path.join(root, 'dist', 'public');
 const env = loadEnv('production', root, '');
 
-type SiteData = { posts: BlogPost[]; projects: Project[]; settings: PublicSettings };
+type SiteData = { posts: BlogPost[]; projects: Project[]; settings: PublicSettings; ticker: Ticker };
 
 async function loadData(): Promise<SiteData> {
   const fallback: SiteData = {
     posts: [...blogPosts].sort((a, b) => b.date.localeCompare(a.date)).map(withCover),
     projects: staticProjects,
     settings: defaultPublicSettings,
+    ticker: defaultTicker,
   };
   const url = env.VITE_SUPABASE_URL;
   const key = env.VITE_SUPABASE_ANON_KEY;
@@ -76,7 +78,16 @@ async function loadData(): Promise<SiteData> {
   if (settingsRes.error) console.warn(`[prerender] Could not load site settings (${settingsRes.error.message}) — using defaults.`);
   else settings = { ...defaultPublicSettings, ...((settingsRes.data?.data as Partial<PublicSettings>) ?? {}) };
 
-  return { posts, projects, settings };
+  // The ticker tables come from add-ticker.sql; until it's run, the default items are used.
+  let ticker = fallback.ticker;
+  const [tickerItems, tickerSettings] = await Promise.all([
+    sb.from('ticker_items').select('id, label, icon').order('sort_order'),
+    sb.from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
+  ]);
+  if (tickerItems.error) console.warn(`[prerender] Could not load ticker items (${tickerItems.error.message}) — using the defaults.`);
+  else ticker = tickerFromRows(tickerItems.data ?? [], tickerSettings.error ? null : tickerSettings.data);
+
+  return { posts, projects, settings, ticker };
 }
 
 /* ---------- HTML ---------- */
@@ -99,10 +110,11 @@ function blocksHtml(blocks: BlogBlock[]) {
     .join('\n');
 }
 
-function homeBody({ posts, projects, settings }: SiteData) {
+function homeBody({ posts, projects, settings, ticker }: SiteData) {
   return `<main class="seo-static">${nav}
 <h1>${e(settings.name)} — aspiring software developer</h1>
 <p>${e(settings.tagline)}</p>
+<ul>${ticker.items.map((i) => `<li>${e(i.label)}</li>`).join('')}</ul>
 <h2>Small town. Big intent.</h2>
 <p>Motivated Class 12 student. Strong foundations in Python, C, and C++, with hands-on practice building functional web and desktop applications.</p>
 <h2>My story</h2>

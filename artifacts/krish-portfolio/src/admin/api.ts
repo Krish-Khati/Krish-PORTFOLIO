@@ -1,6 +1,7 @@
 import { blogPosts, type BlogPost, postFromRow } from '@/data/blog';
 import { type Project, projectFromRow, projects as seedProjects } from '@/data/projects';
 import { tools as seedTools, stats as seedStats } from '@/data/skills';
+import { defaultTicker, type Ticker, type TickerIcon, toTickerIcon } from '@/data/ticker';
 import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 /*
@@ -22,6 +23,8 @@ export type ProjectInput = Omit<AdminProject, 'id' | 'position' | 'updatedAt'> &
 export type SavedProject = AdminProject & { warning?: string };
 export type AdminTool = { id: string; name: string; logoUrl: string; position: number };
 export type AdminStat = { id: string; value: string; label: string; position: number };
+/** Ticker items as the admin edits them; items without an `id` are new. */
+export type TickerInput = { items: { id?: string; label: string; icon: TickerIcon }[]; showSecondRow: boolean; secondRow: string[] };
 export type AdminMessage = { id: string; name: string; email: string; message: string; createdAt: string; read: boolean };
 export type TopicStatus = 'pending' | 'used';
 export type AdminTopic = { id: string; title: string; notes: string; category: PostCategory; status: TopicStatus; position: number };
@@ -50,6 +53,7 @@ type Db = {
   posts: AdminPost[]; projects: ProjectRow[]; tools: AdminTool[]; stats: AdminStat[];
   messages: AdminMessage[]; settings: SiteSettings;
   topics: AdminTopic[]; autoPostSettings: AutoPostSettings; autoRuns: AdminAutoRun[];
+  ticker?: Ticker; // missing in demo data saved before the ticker was editable
 };
 
 const KEY = 'krish-admin-demo-v1';
@@ -358,6 +362,18 @@ function demo_listAutoRuns() {
   return delay([...db().autoRuns].sort((a, b) => b.ranAt.localeCompare(a.ranAt)));
 }
 
+/* ---------- Ticker ---------- */
+
+function demo_getTicker() {
+  return delay(db().ticker ?? defaultTicker);
+}
+
+function demo_saveTicker(input: TickerInput) {
+  db().ticker = { ...input, items: input.items.map((i) => ({ ...i, id: i.id ?? uid() })) };
+  commit();
+  return delay(true);
+}
+
 /* ---------- Messages ---------- */
 
 function demo_listMessages() {
@@ -447,6 +463,18 @@ function checkAutoPostsTable<T>(res: { data: T; error: { message: string; code?:
   if (res.error) {
     if (res.error.code === '42P01' || /relation .* does not exist/i.test(res.error.message)) {
       throw new Error('Auto posts isn’t set up in the database yet. Run supabase/add-auto-posts.sql in the Supabase SQL editor.');
+    }
+    throw new Error(res.error.message);
+  }
+  return res.data;
+}
+
+// Ticker tables ship in add-ticker.sql, which older Supabase projects haven't run yet.
+// PostgREST reports a missing table as PGRST205; Postgres itself as 42P01.
+function checkTickerTable<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
+  if (res.error) {
+    if (res.error.code === '42P01' || res.error.code === 'PGRST205' || /relation .* does not exist|could not find the table/i.test(res.error.message)) {
+      throw new Error('The ticker isn’t set up in the database yet. Run supabase/add-ticker.sql in the Supabase SQL editor.');
     }
     throw new Error(res.error.message);
   }
@@ -694,6 +722,33 @@ const remote = {
     const rows = checkAutoPostsTable(await sb().from('auto_post_runs').select('*').order('ran_at', { ascending: false }).limit(30));
     return (rows as AutoRunRow[]).map(toRun);
   },
+  async getTicker(): Promise<Ticker> {
+    const [items, settings] = await Promise.all([
+      sb().from('ticker_items').select('id, label, icon').order('sort_order'),
+      sb().from('ticker_settings').select('show_second_row, second_row').eq('id', 1).maybeSingle(),
+    ]);
+    const rows = checkTickerTable(items) as { id: string; label: string; icon: string }[];
+    const s = checkTickerTable(settings) as { show_second_row: boolean; second_row: string[] } | null;
+    return {
+      items: rows.map((r) => ({ id: r.id, label: r.label, icon: toTickerIcon(r.icon) })),
+      showSecondRow: s?.show_second_row ?? defaultTicker.showSecondRow,
+      secondRow: s?.second_row ?? defaultTicker.secondRow,
+    };
+  },
+  async saveTicker(input: TickerInput) {
+    // Remove deleted items, then write every item's text/icon/order, then the second-row settings.
+    const existing = checkTickerTable(await sb().from('ticker_items').select('id')) as { id: string }[];
+    const kept = new Set(input.items.map((i) => i.id).filter(Boolean));
+    const removed = existing.map((r) => r.id).filter((id) => !kept.has(id));
+    if (removed.length) checkTickerTable(await sb().from('ticker_items').delete().in('id', removed));
+    const rows = input.items.map((item, i) => ({ id: item.id, label: item.label, icon: item.icon, sort_order: i }));
+    const updates = rows.filter((r) => r.id);
+    const inserts = rows.filter((r) => !r.id).map(({ id: _new, ...r }) => r);
+    if (updates.length) checkTickerTable(await sb().from('ticker_items').upsert(updates));
+    if (inserts.length) checkTickerTable(await sb().from('ticker_items').insert(inserts));
+    checkTickerTable(await sb().from('ticker_settings').upsert({ id: 1, show_second_row: input.showSecondRow, second_row: input.secondRow }));
+    return true;
+  },
   async listMessages() {
     const rows = check(await sb().from('messages').select('*').order('created_at', { ascending: false }));
     return (rows as MessageRow[]).map(toMessage);
@@ -896,6 +951,8 @@ export const getAutoPostSettings = () => (supabase ? remote.getAutoPostSettings(
 export const saveAutoPostSettings = (settings: AutoPostSettings) =>
   supabase ? remote.saveAutoPostSettings(settings) : demo_saveAutoPostSettings(settings);
 export const listAutoRuns = () => (supabase ? remote.listAutoRuns() : demo_listAutoRuns());
+export const getTicker = () => (supabase ? remote.getTicker() : demo_getTicker());
+export const saveTicker = (input: TickerInput) => (supabase ? remote.saveTicker(input) : demo_saveTicker(input));
 export const listMessages = () => (supabase ? remote.listMessages() : demo_listMessages());
 export const setMessageRead = (id: string, read: boolean) =>
   supabase ? remote.setMessageRead(id, read) : demo_setMessageRead(id, read);
