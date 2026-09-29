@@ -12,6 +12,28 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-09-29 (3) — Supabase MCP + database rules
+
+- `.mcp.json`: connects Claude Code to the portfolio's Supabase project through the Supabase MCP server (OAuth login, no credentials in the repo).
+- `CLAUDE.md`: rules for all database work. Write the change to a `.sql` file in `supabase/` first, in a form that is safe to re-run (`if not exists`), then apply it through the MCP and check it with a query. Additive changes only (no `DROP`/`TRUNCATE`/`DELETE` or turning off RLS without the owner's explicit yes). Apply migrations before pushing code that depends on them.
+- From now on, migrations are applied directly instead of being left as "Owner action needed".
+
+### 2026-09-29 (2) — Hero ticker: seamless, slim, editable from admin
+
+**Public site** (`src/components/hero-ticker.tsx`, `src/data/ticker.ts`, `src/index.css`)
+- The band under the hero is now a true infinite marquee: two identical groups slide from 0 to -50%, each repeated to fill the row width, so there is no gap or jump at any screen size.
+- Final look: one slim row (46–48px) on the page background with faint top and bottom borders, 12–12.5px muted gray uppercase text with wide letter spacing, and small green star separators. It scrolls slowly at 32px/s with faded edges and pauses on hover. The first item starts just inside the fade instead of cut off. The gap to the About section is tighter.
+- Reduced motion: no animation, just one centered static row that wraps. Mobile: smaller text and spacing, no horizontal overflow.
+- New default items (ALWAYS BUILDING … LOGIC FIRST). An earlier version of this change had per-item icons and a reverse second row (LEARN / BUILD / SHIP / REPEAT); both were removed in the slim redesign.
+
+**Admin**
+- Settings → Ticker: add, edit, delete and reorder items. Saving triggers the Vercel deploy hook.
+
+**Data / build**
+- `src/data/live.ts` loads the items from Supabase. `scripts/prerender.ts` includes them in the static HTML. Both fall back to the default items if the table is missing.
+
+**Database**: `supabase/add-ticker.sql` creates and seeds `ticker_items` and `ticker_settings`. It is applied on the live database (both tables present ✅). The unused `icon` column and the `ticker_settings` table are left in place (additive only).
+
 ### 2026-09-29 — Project gallery redesign, project pages, automatic image SEO
 
 **Public site**
@@ -29,7 +51,7 @@ so the full evolution of the site is visible at a glance.
 - `api/alt-text.ts` (Vercel function, admin-only like `api/rebuild.ts`): sends the image + project name/description to a vision-capable model chosen live by `scripts/src/ai-model-picker.ts` (Gemini, then Groq vision models) — alt text ≤ 120 chars that mentions the project, never "image of". Falls back to "<Project> screenshot <n>". Needs `GEMINI_API_KEY` and/or `GROQ_API_KEY` in Vercel.
 - `api/tsconfig.json` now uses `"module": "NodeNext"` so `api/*` stays CommonJS while the shared picker (under `scripts/`, `"type": "module"`) compiles as a real ES module — verified by loading the built function the way Vercel does.
 
-**Database**: one file, `supabase/add-project-details.sql` (all `if not exists`; also sets up the `covers` storage bucket). **Owner action needed:** run it once. Until then the site, admin and build skip the missing columns with a warning and keep using each project's name, description, link and image.
+**Database**: one file, `supabase/add-project-details.sql` (all `if not exists`; also sets up the `covers` storage bucket). ~~Owner action needed~~ Now applied on the live database (new `projects` columns present ✅). Before it was applied, the site, admin and build skipped the missing columns with a warning and kept using each project's name, description, link and image.
 
 **Verification**
 - Typecheck ✅, `vercel build` ✅ (prerender against live Supabase without the new columns ✅), headless Chrome at 1366/414/390/375px: new layout, arrows/keys/thumbnails/swipe, portrait images contained, no horizontal overflow ✅; admin demo mode: multi-upload, WebP + size, invalid-file error, fallback alt text, set as cover, save ✅.
