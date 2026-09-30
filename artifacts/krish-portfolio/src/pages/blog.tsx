@@ -8,6 +8,7 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
+import { imageSrcSet, resizedImage } from '@/lib/image';
 import { blogListMeta } from '@/seo/meta';
 import { useSeo } from '@/seo/use-seo';
 
@@ -32,7 +33,7 @@ function PostCover({ post, className }: { post: BlogPost; className: string }) {
   return (
     <div className={className}>
       {cover ? (
-        <img src={cover} alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
+        <img src={resizedImage(cover, 640)} srcSet={imageSrcSet(cover, [400, 640, 960])} sizes="(max-width: 720px) 92vw, 480px" alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
       ) : (
         <div className="bx-cover-fallback" aria-hidden="true">
           <Icon size={46} strokeWidth={1.4} />

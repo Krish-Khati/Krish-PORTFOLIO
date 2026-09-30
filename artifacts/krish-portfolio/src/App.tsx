@@ -1,28 +1,33 @@
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, lazy, type ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Download, Facebook, Github, Instagram, Linkedin, Mail, MapPin, Phone, Search, Youtube } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
-import BlogPage from '@/pages/blog';
-import BlogPostPage from '@/pages/blog-post';
-import ProjectsPage from '@/pages/projects';
-import ProjectPage from '@/pages/project';
 import { SiteNav } from '@/components/site-nav';
 import { ProjectShowcase } from '@/components/project-showcase';
 import { homeProjects } from '@/data/projects';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteEffects } from '@/components/site-effects';
+import { HeroMedia } from '@/components/hero-media';
 import { HeroParticles } from '@/components/hero-particles';
 import { HeroTicker } from '@/components/hero-ticker';
 import { sendContactMessage, useProjects, useSiteSettings, useStats, useTools } from '@/data/live';
 import { slugifyToolName, toolIconFor, type Tool } from '@/data/skills';
 import { toast } from '@/hooks/use-toast';
+import { imageSrcSet, resizedImage } from '@/lib/image';
 import { homeMeta } from '@/seo/meta';
 import { useSeo } from '@/seo/use-seo';
-import AdminApp from '@/admin/admin-app';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+
+// Everything except the home page is a separate chunk, so the admin panel (and supabase-js with it) is
+// never downloaded by visitors of the public site.
+const BlogPage = lazy(() => import('@/pages/blog'));
+const BlogPostPage = lazy(() => import('@/pages/blog-post'));
+const ProjectsPage = lazy(() => import('@/pages/projects'));
+const ProjectPage = lazy(() => import('@/pages/project'));
+const NotFound = lazy(() => import('@/pages/not-found'));
+// Toasts only appear after the contact form is used, so the Radix toast code loads off the critical path.
+const Toaster = lazy(() => import('@/components/ui/toaster').then((m) => ({ default: m.Toaster })));
+const AdminApp = lazy(() => import('@/admin/admin-app'));
 
 const queryClient = new QueryClient();
 
@@ -309,19 +314,7 @@ function Home() {
       <SiteNav />
 
       <section className="hero" id="top" aria-label="Krish introduction">
-        {settings.heroImage ? (
-          <img className="hero-video" src={settings.heroImage} alt="" aria-hidden="true" />
-        ) : (
-          <video
-            className="hero-video"
-            src="/krish-hero.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            aria-hidden="true"
-          />
-        )}
+        <HeroMedia image={settings.heroImage || undefined} />
         <div className="hero-overlay" aria-hidden="true" />
         <HeroParticles />
         <div className="hero-content">
@@ -332,7 +325,8 @@ function Home() {
                 <span
                   key={i}
                   className="name-letter"
-                  style={{ animationDelay: `${0.3 + i * 0.05}s` }}
+                  data-letter={ch}
+                  style={{ animationDelay: `${0.3 + i * 0.05}s`, '--i': i } as CSSProperties}
                 >
                   {ch}
                 </span>
@@ -380,7 +374,7 @@ function Home() {
               <span className="about-dot about-dot-2 about-in" style={{ transitionDelay: '0.55s' }} aria-hidden="true" />
               <span className="about-dot about-dot-3 about-in" style={{ transitionDelay: '0.65s' }} aria-hidden="true" />
               {settings.aboutPhoto ? (
-                <img className="about-photo-img" src={settings.aboutPhoto} alt="Krish, aspiring software developer from Pundri, Haryana" loading="lazy" decoding="async" />
+                <img className="about-photo-img" src={resizedImage(settings.aboutPhoto, 700)} srcSet={imageSrcSet(settings.aboutPhoto, [400, 700, 1000])} sizes="(max-width: 900px) 80vw, 420px" alt="Krish, aspiring software developer from Pundri, Haryana" loading="lazy" decoding="async" />
               ) : (
                 <span>Professional photo placeholder</span>
               )}
@@ -597,15 +591,17 @@ function Home() {
 function Router() {
   return (
     <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/blog" component={BlogPage} />
-        <Route path="/blog/:slug" component={BlogPostPage} />
-        <Route path="/projects" component={ProjectsPage} />
-        <Route path="/projects/:slug" component={ProjectPage} />
-        <Route path="/admin" nest component={AdminApp} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<div className="route-fallback" aria-hidden="true" />}>
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/blog" component={BlogPage} />
+          <Route path="/blog/:slug" component={BlogPostPage} />
+          <Route path="/projects" component={ProjectsPage} />
+          <Route path="/projects/:slug" component={ProjectPage} />
+          <Route path="/admin" nest component={AdminApp} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </RoutedErrorBoundary>
   );
 }
@@ -630,13 +626,13 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <SiteChrome />
-          <Router />
-        </WouterRouter>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <SiteChrome />
+        <Router />
+      </WouterRouter>
+      <Suspense fallback={null}>
         <Toaster />
-      </TooltipProvider>
+      </Suspense>
     </QueryClientProvider>
   );
 }

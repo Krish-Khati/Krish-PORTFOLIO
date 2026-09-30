@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Everything between the seo-head markers is replaced per page by scripts/prerender.ts at build
          time, and kept in sync on client-side navigation by src/seo/use-seo.ts (tags marked data-seo). -->
     <!--seo-head-->
@@ -22,9 +22,11 @@
     <meta name="theme-color" content="#0d0d0d" />
     <link rel="alternate" type="application/rss+xml" title="Krish — Blog" href="/rss.xml" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Fonts are self-hosted (src/index.css); preload only what the hero needs. -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/poppins-800-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <!-- The hero poster is the LCP image; the video itself loads later (see HeroMedia in App.tsx). -->
+    <link data-home-only rel="preload" as="image" type="image/avif" fetchpriority="high" imagesrcset="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w" imagesizes="100vw">
   </head>
   <body>
     <div id="root"><!--app-html--></div>

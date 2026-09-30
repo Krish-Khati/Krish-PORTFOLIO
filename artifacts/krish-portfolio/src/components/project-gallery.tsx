@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type TouchEvent, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, Play } from 'lucide-react';
 import { type GalleryImage, imageAlt, type Project } from '@/data/projects';
+import { imageSrcSet, resizedImage } from '@/lib/image';
 
 type Slide =
   | ({ kind: 'image'; index: number } & GalleryImage)
@@ -104,7 +105,9 @@ export function ProjectGallery({ project, priority = false }: { project: Project
               {s.kind === 'image' ? (
                 seen.has(i) && (
                   <img
-                    src={s.url}
+                    src={resizedImage(s.url, 900)}
+                    srcSet={imageSrcSet(s.url, [480, 900, 1400])}
+                    sizes="(max-width: 900px) 92vw, 560px"
                     alt={imageAlt(project, s, s.index)}
                     width={s.width}
                     height={s.height}
@@ -170,7 +173,7 @@ export function ProjectGallery({ project, priority = false }: { project: Project
               onClick={() => go(i)}
             >
               {s.kind === 'image' ? (
-                <img src={s.thumb || s.url} alt="" loading="lazy" decoding="async" />
+                <img src={resizedImage(s.thumb || s.url, 160)} alt="" loading="lazy" decoding="async" />
               ) : s.youtubeId ? (
                 <img src={`https://i.ytimg.com/vi/${s.youtubeId}/default.jpg`} alt="" loading="lazy" decoding="async" />
               ) : null}

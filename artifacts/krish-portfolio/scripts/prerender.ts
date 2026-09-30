@@ -107,8 +107,16 @@ function blocksHtml(blocks: BlogBlock[]) {
     .join('\n');
 }
 
+// The same poster the React hero shows (see HeroMedia), in the static HTML so it can paint — and count as
+// the LCP — before any JavaScript has run. React swaps in the real hero and reuses the cached image.
+const heroPoster = `<div class="seo-hero" aria-hidden="true"><picture>
+<source type="image/avif" srcset="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w" sizes="100vw" />
+<source type="image/webp" srcset="/media/krish-hero-poster-1280.webp 1280w, /media/krish-hero-poster-1920.webp 1920w" sizes="100vw" />
+<img class="hero-video" src="/media/krish-hero-poster-1280.jpg" srcset="/media/krish-hero-poster-1280.jpg 1280w, /media/krish-hero-poster-1920.jpg 1920w" sizes="100vw" width="1280" height="720" alt="" fetchpriority="high" decoding="async" />
+</picture><div class="hero-overlay"></div></div>`;
+
 function homeBody({ posts, projects, settings, ticker }: SiteData) {
-  return `<main class="seo-static">${nav}
+  return `${settings.heroImage ? '' : heroPoster}<main class="seo-static">${nav}
 <h1>${e(settings.name)} — aspiring software developer</h1>
 <p>${e(settings.tagline)}</p>
 <ul>${ticker.items.map((i) => `<li>${e(i.label)}</li>`).join('')}</ul>
@@ -328,7 +336,15 @@ function writeFile(rel: string, content: string) {
 
 async function main() {
   const templatePath = path.join(outDir, 'index.html');
-  const template = fs.readFileSync(templatePath, 'utf8');
+  // The stylesheet blocks first paint, and as a separate file it costs an extra round trip after the HTML
+  // arrives. Inlining it (~27 KB gzipped) lets every prerendered page paint straight from its own HTML.
+  const template = fs.readFileSync(templatePath, 'utf8').replace(
+    /<link rel="stylesheet"[^>]*href="(\/assets\/[^"]+\.css)"[^>]*>/,
+    (link, href: string) => {
+      const file = path.join(outDir, href);
+      return fs.existsSync(file) ? `<style>${fs.readFileSync(file, 'utf8')}</style>` : link;
+    },
+  );
   const headRe = /<!--seo-head-->[\s\S]*?<!--\/seo-head-->/;
   if (!headRe.test(template) || !template.includes('<!--app-html-->')) {
     throw new Error('[prerender] index.html is missing the <!--seo-head--> / <!--app-html--> markers.');
@@ -346,12 +362,16 @@ async function main() {
     return true;
   });
   const data: SiteData = { ...loaded, projects };
-  const render = (meta: PageMeta, body: string) =>
-    template.replace(headRe, () => headHtml(meta)).replace('<!--app-html-->', () => body);
+  // Tags marked data-home-only (the hero poster preload) are kept on the home page and dropped elsewhere.
+  const homeOnlyRe = /[ \t]*<link[^>]*data-home-only[^>]*>\n?/g;
+  const render = (meta: PageMeta, body: string, home = false) => {
+    const page = template.replace(headRe, () => headHtml(meta)).replace('<!--app-html-->', () => body);
+    return home ? page : page.replace(homeOnlyRe, '');
+  };
 
   // The untouched shell, served (via vercel.json) for every URL that has no prerendered page.
-  writeFile('spa.html', template);
-  writeFile('index.html', render(homeMeta(data.settings), homeBody(data)));
+  writeFile('spa.html', template.replace(homeOnlyRe, ''));
+  writeFile('index.html', render(homeMeta(data.settings), homeBody(data), true));
   writeFile('blog/index.html', render(blogListMeta(data.posts, data.settings), blogBody(data)));
   writeFile('projects/index.html', render(projectsMeta(data.projects, data.settings), projectsBody(data)));
   for (const project of data.projects) {

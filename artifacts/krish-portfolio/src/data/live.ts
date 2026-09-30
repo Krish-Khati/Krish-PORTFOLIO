@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { insertRow, publicDbConfigured, selectRows } from '@/lib/public-db';
 import { blogPosts, type BlogPost, postFromRow, withCover } from './blog';
 import { projectFromRow, projects as staticProjects, type Project } from './projects';
 import { defaultPublicSettings, type PublicSettings } from './settings';
@@ -19,16 +19,12 @@ export function usePublishedPosts() {
   return useQuery({
     queryKey: ['public', 'posts'],
     queryFn: async (): Promise<BlogPost[]> => {
-      if (!supabase) return staticPosts;
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*') // '*' so the query keeps working whether or not optional columns (cover, SEO fields) exist yet
-        .eq('status', 'published')
-        .order('date', { ascending: false });
-      if (error) throw error;
-      return (data as Record<string, unknown>[]).map((row) => withCover(postFromRow(row)));
+      if (!publicDbConfigured) return staticPosts;
+      // select=* so the query keeps working whether or not optional columns (cover, SEO fields) exist yet
+      const data = await selectRows('posts', { filters: { status: 'eq.published' }, order: 'date.desc' });
+      return data.map((row) => withCover(postFromRow(row)));
     },
-    initialData: supabase ? undefined : staticPosts,
+    initialData: publicDbConfigured ? undefined : staticPosts,
     staleTime: 60_000,
   });
 }
@@ -37,13 +33,12 @@ export function useProjects() {
   return useQuery({
     queryKey: ['public', 'projects'],
     queryFn: async (): Promise<Project[]> => {
-      if (!supabase) return staticProjects;
-      // '*' so this keeps working whether or not the optional columns (add-project-details.sql) exist yet
-      const { data, error } = await supabase.from('projects').select('*').order('position');
-      if (error) throw error;
-      return (data as Record<string, unknown>[]).map(projectFromRow);
+      if (!publicDbConfigured) return staticProjects;
+      // select=* so this keeps working whether or not the optional columns (add-project-details.sql) exist yet
+      const data = await selectRows('projects', { order: 'position.asc' });
+      return data.map(projectFromRow);
     },
-    initialData: supabase ? undefined : staticProjects,
+    initialData: publicDbConfigured ? undefined : staticProjects,
     staleTime: 60_000,
   });
 }
@@ -54,17 +49,15 @@ export function useTools() {
   return useQuery({
     queryKey: ['public', 'tools'],
     queryFn: async (): Promise<Tool[]> => {
-      if (!supabase) return staticTools;
+      if (!publicDbConfigured) return staticTools;
       try {
-        const { data, error } = await supabase.from('tools').select('id, name, logo_url').order('sort_order');
-        if (error) throw error;
-        const rows = data as { id: string; name: string; logo_url: string }[];
+        const rows = await selectRows<{ id: string; name: string; logo_url: string }>('tools', { select: 'id,name,logo_url', order: 'sort_order.asc' });
         return rows.length ? rows.map((r) => ({ id: r.id, name: r.name, logoUrl: r.logo_url ?? '' })) : staticTools;
       } catch {
         return staticTools;
       }
     },
-    initialData: supabase ? undefined : staticTools,
+    initialData: publicDbConfigured ? undefined : staticTools,
     staleTime: 60_000,
   });
 }
@@ -73,17 +66,15 @@ export function useStats() {
   return useQuery({
     queryKey: ['public', 'stats'],
     queryFn: async (): Promise<Stat[]> => {
-      if (!supabase) return staticStats;
+      if (!publicDbConfigured) return staticStats;
       try {
-        const { data, error } = await supabase.from('stats').select('id, value, label').order('sort_order');
-        if (error) throw error;
-        const rows = data as { id: string; value: string; label: string }[];
+        const rows = await selectRows<{ id: string; value: string; label: string }>('stats', { select: 'id,value,label', order: 'sort_order.asc' });
         return rows.length ? rows : staticStats;
       } catch {
         return staticStats;
       }
     },
-    initialData: supabase ? undefined : staticStats,
+    initialData: publicDbConfigured ? undefined : staticStats,
     staleTime: 60_000,
   });
 }
@@ -94,16 +85,15 @@ export function useTicker() {
   return useQuery({
     queryKey: ['public', 'ticker'],
     queryFn: async (): Promise<Ticker> => {
-      if (!supabase) return defaultTicker;
+      if (!publicDbConfigured) return defaultTicker;
       try {
-        const items = await supabase.from('ticker_items').select('id, label').order('sort_order');
-        if (items.error) throw items.error;
-        return tickerFromRows(items.data ?? []);
+        const items = await selectRows<{ id: string; label: string }>('ticker_items', { select: 'id,label', order: 'sort_order.asc' });
+        return tickerFromRows(items);
       } catch {
         return defaultTicker;
       }
     },
-    initialData: supabase ? undefined : defaultTicker,
+    initialData: publicDbConfigured ? undefined : defaultTicker,
     placeholderData: defaultTicker,
     staleTime: 60_000,
   });
@@ -113,10 +103,9 @@ export function useSiteSettings(): PublicSettings {
   const { data } = useQuery({
     queryKey: ['public', 'settings'],
     queryFn: async (): Promise<PublicSettings> => {
-      if (!supabase) return defaultPublicSettings;
-      const { data, error } = await supabase.from('site_settings').select('data').eq('id', 1).maybeSingle();
-      if (error) throw error;
-      return { ...defaultPublicSettings, ...((data?.data as Partial<PublicSettings>) ?? {}) };
+      if (!publicDbConfigured) return defaultPublicSettings;
+      const [row] = await selectRows<{ data: Partial<PublicSettings> | null }>('site_settings', { select: 'data', filters: { id: 'eq.1' } });
+      return { ...defaultPublicSettings, ...(row?.data ?? {}) };
     },
     staleTime: 60_000,
   });
@@ -125,8 +114,7 @@ export function useSiteSettings(): PublicSettings {
 
 /** Saves a contact-form message to the admin inbox. Returns false when Supabase isn't configured. */
 export async function sendContactMessage(input: { name: string; email: string; message: string }) {
-  if (!supabase) return false;
-  const { error } = await supabase.from('messages').insert(input);
-  if (error) throw error;
+  if (!publicDbConfigured) return false;
+  await insertRow('messages', input);
   return true;
 }

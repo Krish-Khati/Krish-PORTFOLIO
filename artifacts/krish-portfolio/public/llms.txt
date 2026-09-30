@@ -1,0 +1,17 @@
+# Krish — Aspiring Software Developer
+
+> Portfolio and blog of Krish, a self-taught aspiring software developer from Haryana, India, building real projects with Python, C, C++, the web and AI tools. Currently looking for an entry-level role or internship.
+
+The site is a single-page app with prerendered HTML for every public page. Content may be summarized and cited with a link back to the source page.
+
+## Main pages
+
+- [Home](https://krish-portfolio-dev.vercel.app/): Introduction, skills, selected projects, learning timeline and contact form
+- [Projects](https://krish-portfolio-dev.vercel.app/projects): Every project with screenshots, key features, tech stack and links
+- [Blog](https://krish-portfolio-dev.vercel.app/blog): Notes on learning to code, building projects, AI tools and digital marketing
+
+## Machine-readable
+
+- [Blog RSS feed](https://krish-portfolio-dev.vercel.app/rss.xml): Latest posts with full content
+- [Sitemap](https://krish-portfolio-dev.vercel.app/sitemap.xml): All public URLs
+- [Resume (Markdown)](https://krish-portfolio-dev.vercel.app/media/krish-resume.md): Plain-text resume

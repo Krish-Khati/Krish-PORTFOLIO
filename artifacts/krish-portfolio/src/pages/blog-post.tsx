@@ -7,6 +7,7 @@ import { InlineText } from '@/components/rich-text';
 import NotFound from '@/pages/not-found';
 import { formatPostDate, readingMinutes } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
+import { imageSrcSet, resizedImage } from '@/lib/image';
 import { postMeta } from '@/seo/meta';
 import { relatedPosts } from '@/seo/related';
 import { useSeo } from '@/seo/use-seo';
@@ -61,7 +62,9 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
             <img
               className="post-cover blog-anim"
               style={{ animationDelay: '.4s' }}
-              src={post.cover}
+              src={resizedImage(post.cover, 1000)}
+              srcSet={imageSrcSet(post.cover, [640, 1000, 1400])}
+              sizes="(max-width: 900px) 92vw, 860px"
               alt={post.coverAlt || post.title}
               fetchPriority="high"
               decoding="async"
@@ -113,7 +116,7 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
                 {related.map((r) => (
                   <Link key={r.slug} href={`/blog/${r.slug}`} className="post-related-card" data-testid={`link-related-${r.slug}`}>
                     {r.cover ? (
-                      <img src={r.cover} alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
+                      <img src={resizedImage(r.cover, 400)} alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
                     ) : (
                       <span className="post-related-fallback" aria-hidden="true" />
                     )}

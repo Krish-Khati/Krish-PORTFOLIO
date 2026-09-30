@@ -117,7 +117,16 @@ export function SiteEffects() {
       document.addEventListener('mouseout', onLeaveWindow);
     }
 
+    // Looping animations (ticker, rings, glows, …) only run while their section is on screen.
+    const looping = document.querySelectorAll('.hero, .ticker-row, .section, .site-footer');
+    const offscreenIO = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => entry.target.classList.toggle('is-offscreen', !entry.isIntersecting)),
+      { rootMargin: '120px 0px' },
+    );
+    looping.forEach((el) => offscreenIO.observe(el));
+
     return () => {
+      offscreenIO.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       document.removeEventListener('mousemove', onMove);

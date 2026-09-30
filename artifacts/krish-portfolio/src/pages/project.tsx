@@ -7,6 +7,7 @@ import { PostBlocks } from '@/components/post-blocks';
 import { ProjectShowcase } from '@/components/project-showcase';
 import NotFound from '@/pages/not-found';
 import { usePublishedPosts, useProjects, useSiteSettings } from '@/data/live';
+import { resizedImage } from '@/lib/image';
 import { projectPath } from '@/data/projects';
 import { textToBlocks } from '@/lib/text-blocks';
 import { projectMeta } from '@/seo/meta';
@@ -76,7 +77,7 @@ export default function ProjectPage({ params }: { params: { slug: string } }) {
                 {related.map((r) => (
                   <Link key={r.slug} href={`/blog/${r.slug}`} className="post-related-card" data-testid={`link-related-${r.slug}`}>
                     {r.cover ? (
-                      <img src={r.cover} alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
+                      <img src={resizedImage(r.cover, 400)} alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
                     ) : (
                       <span className="post-related-fallback" aria-hidden="true" />
                     )}

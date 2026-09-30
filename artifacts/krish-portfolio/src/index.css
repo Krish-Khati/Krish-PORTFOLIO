@@ -1,6 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* Self-hosted Google Fonts (latin subset) — replaces the render-blocking fonts.googleapis.com request. */
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/dm-mono-400-latin.woff2') format('woff2'); }
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/dm-mono-500-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/inter-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/poppins-400-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/poppins-500-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/poppins-600-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/poppins-700-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 800; font-display: swap; src: url('/fonts/poppins-800-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/space-grotesk-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Syne'; font-style: normal; font-weight: 600 800; font-display: swap; src: url('/fonts/syne-latin.woff2') format('woff2'); }
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -610,11 +620,15 @@ button { font: inherit; }
 /* ---------- Site-wide motion ---------- */
 .scroll-progress {
   position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000; pointer-events: none;
-  background: linear-gradient(90deg, #2ecc71, #16a085, #2ecc71); background-size: 200% 100%;
+  background: #2ecc71; overflow: hidden;
   transform: scaleX(0); transform-origin: left; box-shadow: 0 0 12px rgba(46,204,113,.6);
+}
+.scroll-progress::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 200%;
+  background: linear-gradient(90deg, #2ecc71 0%, #16a085 25%, #2ecc71 50%, #16a085 75%, #2ecc71 100%);
   animation: gradientSlide 3s linear infinite;
 }
-@keyframes gradientSlide { to { background-position: 200% 0; } }
+@keyframes gradientSlide { to { transform: translateX(-50%); } }
 .back-to-top {
   position: fixed; right: clamp(16px, 3vw, 32px); bottom: clamp(16px, 3vw, 32px); z-index: 998;
   display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
@@ -630,29 +644,34 @@ button { font: inherit; }
 
 /* Hero: parallax video, particle canvas, name shine, button sheen */
 .hero-video { translate: 0 var(--hero-py, 0px); }
+/* The poster's <picture> wrapper must stay out of the hero grid, like the absolutely positioned video it replaces. */
+.hero picture, .seo-hero picture { position: absolute; inset: 0; z-index: -3; display: block; overflow: hidden; }
+.hero-video-clip { opacity: 0; transition: opacity .8s ease; }
+.hero-video-clip.is-playing { opacity: 1; }
+.route-fallback { min-height: 100dvh; background: #071114; }
+/* Sections scrolled out of view stop their looping animations (toggled by SiteEffects). */
+.is-offscreen, .is-offscreen *, .is-offscreen *::before, .is-offscreen *::after { animation-play-state: paused !important; }
 .hero-overlay {
   position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: radial-gradient(ellipse at 20% 50%, rgba(7,17,20,.55), transparent 70%),
               linear-gradient(180deg, transparent 60%, rgba(13,13,13,.9));
 }
 .hero-particles { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
-.hero-name .name-letter {
-  background: linear-gradient(100deg, #fff 0%, #fff 40%, #2ecc71 50%, #fff 60%, #fff 100%);
-  background-size: 250% 100%; background-position: 100% 0;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation-name: heroRise30, nameShine;
-  animation-duration: .7s, 6s;
-  animation-timing-function: cubic-bezier(.22,.68,.32,1), ease-in-out;
-  animation-iteration-count: 1, infinite;
+/* The green shine sweeps across the name letter by letter. Each letter carries a green copy of itself
+   (::after) that fades in and out, so the loop only animates opacity and stays on the compositor. */
+.hero-name .name-letter { position: relative; color: #fff; }
+.hero-name .name-letter::after {
+  content: attr(data-letter) / ''; position: absolute; left: 0; top: 0; color: #2ecc71; opacity: 0; pointer-events: none;
+  animation: nameGlint 6s ease-in-out calc(1.4s + var(--i, 0) * .14s) infinite;
 }
-@keyframes nameShine { 0% { background-position: 100% 0; } 40%, 100% { background-position: -50% 0; } }
+@keyframes nameGlint { 0%, 4% { opacity: 0; } 12% { opacity: 1; } 22%, 100% { opacity: 0; } }
 .btn-primary { position: relative; overflow: hidden; }
 .btn-primary::after {
   content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; pointer-events: none;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent);
   transform: skewX(-20deg); animation: btnSheen 4s ease-in-out 2.5s infinite;
 }
-@keyframes btnSheen { 0% { left: -60%; } 30%, 100% { left: 130%; } }
+@keyframes btnSheen { 0% { translate: 0 0; } 30%, 100% { translate: 475% 0; } }
 
 /* Extra life on existing sections */
 .tool-icon { position: relative; isolation: isolate; }
@@ -1058,7 +1077,7 @@ button { font: inherit; }
   .hero-anim, .hero-anim *, .name-letter, .name-dot { animation-duration: .7s !important; transition-duration: .7s !important; }
   .about-in { opacity: 1 !important; transform: none !important; }
   .blog-anim { opacity: 1 !important; animation: none !important; }
-  .hero-name .name-letter { animation-name: heroRise30 !important; }
+  .hero-name .name-letter::after { display: none; }
   .btn-primary::after { display: none; }
   .hero-particles, .scroll-progress { display: none; }
 }
@@ -1089,6 +1108,7 @@ button { font: inherit; }
 .projects-page-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 48px; }
 .footer-links { display: inline-flex; gap: 18px; }
 /* Prerendered (no-JS) markup, replaced by the React app as soon as it loads. */
+.seo-hero { position: absolute; top: 0; left: 0; right: 0; height: min(900px, 100dvh); overflow: hidden; isolation: isolate; z-index: -1; background: #101c20; }
 .seo-static { max-width: 760px; margin: 0 auto; padding: 120px 20px 60px; color: #cccccc; font-family: 'Inter', sans-serif; line-height: 1.7; }
 .seo-static-nav { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 40px; }
 .seo-static a { color: #2ecc71; }

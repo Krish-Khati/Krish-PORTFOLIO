@@ -78,8 +78,8 @@ export function ProjectShowcase({
               </a>
             )}
             {showMore && (
-              <Link className="pj-more" href={href} aria-label={`Read more about ${p.name}`}>
-                Read more <ArrowRight size={15} />
+              <Link className="pj-more" href={href}>
+                Read more<span className="visually-hidden"> about {p.name}</span> <ArrowRight size={15} aria-hidden="true" />
               </Link>
             )}
           </div>
