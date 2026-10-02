@@ -10,6 +10,14 @@ The site is a single-page app with prerendered HTML for every public page. Conte
 - [Projects](https://krish-portfolio-dev.vercel.app/projects): Every project with screenshots, key features, tech stack and links
 - [Blog](https://krish-portfolio-dev.vercel.app/blog): Notes on learning to code, building projects, AI tools and digital marketing
 
+## Projects
+
+- [Memory Match Game](https://krish-portfolio-dev.vercel.app/projects/memory-match-game)
+- [LinguaBridge](https://krish-portfolio-dev.vercel.app/projects/linguabridge)
+- [Fitness Temple](https://krish-portfolio-dev.vercel.app/projects/fitness-temple)
+- [Calculator](https://krish-portfolio-dev.vercel.app/projects/calculator)
+- [M2F Gym Website](https://krish-portfolio-dev.vercel.app/projects/m2f-gym-website)
+
 ## Machine-readable
 
 - [Blog RSS feed](https://krish-portfolio-dev.vercel.app/rss.xml): Latest posts with full content

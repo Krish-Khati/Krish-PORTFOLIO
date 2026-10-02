@@ -1,32 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Everything between the seo-head markers is replaced per page by scripts/prerender.ts at build
          time, and kept in sync on client-side navigation by src/seo/use-seo.ts (tags marked data-seo). -->
     <!--seo-head-->
     <title>Krish — Aspiring Software Developer</title>
-    <meta data-seo name="description" content="The portfolio and blog of Krish, a self-taught aspiring software developer from Haryana, India, building real projects with Python, C, C++, the web and AI tools." />
+    <meta
+      data-seo
+      name="description"
+      content="The portfolio and blog of Krish, a self-taught aspiring software developer from Haryana, India, building real projects with Python, C, C++, the web and AI tools."
+    />
     <meta data-seo name="robots" content="index, follow" />
     <meta data-seo property="og:type" content="website" />
     <meta data-seo property="og:site_name" content="Krish" />
-    <meta data-seo property="og:title" content="Krish — Aspiring Software Developer" />
-    <meta data-seo property="og:description" content="Explore Krish's projects, skills, blog and trajectory as an aspiring software developer." />
-    <meta data-seo property="og:image" content="https://krish-portfolio-dev.vercel.app/og-default.png" />
+    <meta
+      data-seo
+      property="og:title"
+      content="Krish — Aspiring Software Developer"
+    />
+    <meta
+      data-seo
+      property="og:description"
+      content="Explore Krish's projects, skills, blog and trajectory as an aspiring software developer."
+    />
+    <meta
+      data-seo
+      property="og:image"
+      content="https://krish-portfolio-dev.vercel.app/og-default.png"
+    />
     <meta data-seo name="twitter:card" content="summary_large_image" />
-    <meta data-seo name="twitter:title" content="Krish — Aspiring Software Developer" />
-    <meta data-seo name="twitter:description" content="Explore Krish's projects, skills, blog and trajectory as an aspiring software developer." />
-    <meta data-seo name="twitter:image" content="https://krish-portfolio-dev.vercel.app/og-default.png" />
+    <meta
+      data-seo
+      name="twitter:title"
+      content="Krish — Aspiring Software Developer"
+    />
+    <meta
+      data-seo
+      name="twitter:description"
+      content="Explore Krish's projects, skills, blog and trajectory as an aspiring software developer."
+    />
+    <meta
+      data-seo
+      name="twitter:image"
+      content="https://krish-portfolio-dev.vercel.app/og-default.png"
+    />
     <!--/seo-head-->
     <meta name="theme-color" content="#0d0d0d" />
-    <link rel="alternate" type="application/rss+xml" title="Krish — Blog" href="/rss.xml" />
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="Krish — Blog"
+      href="/rss.xml"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- Fonts are self-hosted (src/index.css); preload only what the hero needs. -->
-    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/poppins-800-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link
+      rel="preload"
+      href="/fonts/inter-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/poppins-800-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <!-- The hero poster is the LCP image; the video itself loads later (see HeroMedia in App.tsx). -->
-    <link data-home-only rel="preload" as="image" type="image/avif" fetchpriority="high" imagesrcset="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w" imagesizes="100vw">
+    <link
+      data-home-only
+      rel="preload"
+      as="image"
+      type="image/avif"
+      fetchpriority="high"
+      imagesrcset="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w"
+      imagesizes="100vw"
+    />
   </head>
   <body>
     <div id="root"><!--app-html--></div>

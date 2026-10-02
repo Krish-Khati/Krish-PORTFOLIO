@@ -7,7 +7,7 @@ export function SiteFooter() {
       <span className="footer-links">
         <Link href="/blog" className="footer-link">Blog</Link>
         <Link href="/projects" className="footer-link">Projects</Link>
-        <a href="/rss.xml" className="footer-link">RSS</a>
+        <a href="/rss.xml" className="footer-link" aria-label="Krish's blog RSS feed">RSS</a>
       </span>
       <span>Pundri, Haryana / made with momentum</span>
     </footer>

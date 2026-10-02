@@ -113,10 +113,11 @@ button { font: inherit; }
   transition: color .3s ease, transform .3s ease;
 }
 .nav-links a::after {
-  content: ''; position: absolute; left: 0; bottom: -4px; width: 0; height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, #2ecc71, #16a085); transition: width .3s ease;
+  content: ''; position: absolute; left: 0; bottom: -4px; width: 100%; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, #2ecc71, #16a085);
+  transform: scaleX(0); transform-origin: left; transition: transform .3s ease;
 }
-.nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
+.nav-links a:hover::after, .nav-links a.active::after { transform: scaleX(1); }
 .nav-links a:hover { color: #2ecc71; }
 .nav-links a.active { color: #ffffff; font-weight: 600; }
 .socials { display: flex; align-items: center; gap: 12px; }
@@ -693,10 +694,16 @@ button { font: inherit; }
 }
 @property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @keyframes borderSpin { to { --spin: 360deg; } }
-.timeline-item::before { animation: dotPulse 2.4s ease-out infinite; }
+.timeline-item::before { box-shadow: 0 0 0 4px rgba(46, 204, 113, .15); }
+/* The pulse ring grows and fades with transform/opacity so no box-shadow repaints each frame. */
+.timeline-item::after {
+  content: ''; position: absolute; left: -31px; top: 32px;
+  width: 8px; height: 8px; border-radius: 50%; pointer-events: none;
+  background: rgba(46, 204, 113, .55); animation: dotPulse 2.4s ease-out infinite;
+}
 @keyframes dotPulse {
-  0% { box-shadow: 0 0 0 0 rgba(46,204,113,.5); }
-  70%, 100% { box-shadow: 0 0 0 10px rgba(46,204,113,0); }
+  0% { transform: scale(1); opacity: 1; }
+  70%, 100% { transform: scale(3); opacity: 0; }
 }
 
 /* Nav: mobile menu toggle + footer blog link */
@@ -879,10 +886,11 @@ button { font: inherit; }
 .bx-dots { position: relative; z-index: 1; display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
 .bx-dot {
   width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; cursor: pointer; background: rgba(255,255,255,.22);
-  transition: width .4s cubic-bezier(.22,.68,.32,1), background .3s ease, box-shadow .3s ease;
+  transform: scaleX(1); transform-origin: left;
+  transition: transform .4s cubic-bezier(.22,.68,.32,1), background .3s ease;
 }
 .bx-dot:hover { background: rgba(46,204,113,.6); }
-.bx-dot.is-active { width: 28px; background: var(--bx-green); box-shadow: 0 0 12px rgba(46,204,113,.55); }
+.bx-dot.is-active { transform: scaleX(3.5); background: var(--bx-green); box-shadow: 0 0 12px rgba(46,204,113,.55); }
 .bx-dot:focus-visible, .bx-pill:focus-visible { outline: 2px solid var(--bx-green); outline-offset: 3px; }
 
 /* Blog — category browser */
@@ -1159,8 +1167,8 @@ button { font: inherit; }
   background: rgba(8,14,12,.72); color: #fff; font: 600 12px/1.4 'Inter', sans-serif; letter-spacing: .04em;
 }
 .pjg-dots { position: absolute; right: 14px; bottom: 17px; z-index: 2; display: flex; align-items: center; gap: 6px; }
-.pjg-dots span { width: 7px; height: 7px; border-radius: 999px; background: rgba(255,255,255,.4); transition: width .35s cubic-bezier(.22,.68,.32,1), background .3s ease; }
-.pjg-dots span.is-active { width: 20px; background: #2ecc71; box-shadow: 0 0 10px rgba(46,204,113,.6); }
+.pjg-dots span { width: 7px; height: 7px; border-radius: 999px; background: rgba(255,255,255,.4); transform: scaleX(1); transform-origin: left; transition: transform .35s cubic-bezier(.22,.68,.32,1), background .3s ease; }
+.pjg-dots span.is-active { transform: scaleX(2.86); background: #2ecc71; box-shadow: 0 0 10px rgba(46,204,113,.6); }
 .pjg-caption { margin: 10px 4px 0; color: #9aaba6; font: 13px/1.5 'Inter', sans-serif; }
 .pjg-thumbs { display: flex; gap: 10px; margin-top: 12px; padding: 2px 2px 4px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: rgba(46,204,113,.4) transparent; }
 .pjg-thumb {

@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { imageSrcSet, resizedImage } from '@/lib/image';
+import { useEffect, useRef, useState } from "react";
+import { imageSrcSet, resizedImage } from "@/lib/image";
 
 type NetworkInformation = { saveData?: boolean; effectiveType?: string };
 
 /** Whether the background video should be loaded at all: not on data saver, slow links or reduced motion. */
 function videoAllowed() {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  const conn = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    return false;
+  const conn = (navigator as Navigator & { connection?: NetworkInformation })
+    .connection;
   if (conn?.saveData) return false;
-  if (conn?.effectiveType && /^(slow-2g|2g|3g)$/.test(conn.effectiveType)) return false;
+  if (conn?.effectiveType && /^(slow-2g|2g|3g)$/.test(conn.effectiveType))
+    return false;
   return true;
 }
 
@@ -30,19 +33,26 @@ export function HeroMedia({ image }: { image?: string }) {
     const start = () => {
       if (cancelled) return;
       // Don't spend data on a tab nobody is looking at.
-      if (document.hidden) document.addEventListener('visibilitychange', start, { once: true });
+      if (document.hidden)
+        document.addEventListener("visibilitychange", start, { once: true });
       else setMountVideo(true);
     };
     const schedule = () => {
-      timer = window.setTimeout(() => ('requestIdleCallback' in window ? window.requestIdleCallback(start, { timeout: 3000 }) : start()), 1200);
+      timer = window.setTimeout(
+        () =>
+          "requestIdleCallback" in window
+            ? window.requestIdleCallback(start, { timeout: 3000 })
+            : start(),
+        1200,
+      );
     };
-    if (document.readyState === 'complete') schedule();
-    else window.addEventListener('load', schedule, { once: true });
+    if (document.readyState === "complete") schedule();
+    else window.addEventListener("load", schedule, { once: true });
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
-      window.removeEventListener('load', schedule);
-      document.removeEventListener('visibilitychange', start);
+      window.removeEventListener("load", schedule);
+      document.removeEventListener("visibilitychange", start);
     };
   }, [image]);
 
@@ -73,13 +83,21 @@ export function HeroMedia({ image }: { image?: string }) {
     );
   }
 
-  const small = window.matchMedia('(max-width: 768px)').matches;
-  const sizes = '100vw';
+  const small = window.matchMedia("(max-width: 768px)").matches;
+  const sizes = "100vw";
   return (
     <>
       <picture>
-        <source type="image/avif" srcSet="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w" sizes={sizes} />
-        <source type="image/webp" srcSet="/media/krish-hero-poster-1280.webp 1280w, /media/krish-hero-poster-1920.webp 1920w" sizes={sizes} />
+        <source
+          type="image/avif"
+          srcSet="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w"
+          sizes={sizes}
+        />
+        <source
+          type="image/webp"
+          srcSet="/media/krish-hero-poster-1280.webp 1280w, /media/krish-hero-poster-1920.webp 1920w"
+          sizes={sizes}
+        />
         <img
           className="hero-video"
           src="/media/krish-hero-poster-1280.jpg"
@@ -96,16 +114,29 @@ export function HeroMedia({ image }: { image?: string }) {
       {mountVideo && (
         <video
           ref={videoRef}
-          className={`hero-video hero-video-clip${playing ? ' is-playing' : ''}`}
-          src={small ? '/media/krish-hero-sm.mp4' : '/media/krish-hero.mp4'}
+          className={`hero-video hero-video-clip${playing ? " is-playing" : ""}`}
+          poster={
+            small
+              ? "/media/krish-hero-poster-1280.webp"
+              : "/media/krish-hero-poster-1920.webp"
+          }
           autoPlay
           loop
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
           onPlaying={() => setPlaying(true)}
-        />
+        >
+          <source
+            src={small ? "/media/krish-hero-sm.webm" : "/media/krish-hero.webm"}
+            type="video/webm"
+          />
+          <source
+            src={small ? "/media/krish-hero-sm.mp4" : "/media/krish-hero.mp4"}
+            type="video/mp4"
+          />
+        </video>
       )}
     </>
   );

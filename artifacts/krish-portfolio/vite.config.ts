@@ -52,6 +52,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    // Emit source maps alongside the minified JS so PageSpeed's "missing source maps" audit passes.
+    // Maps are only fetched when DevTools is open, so they don't add to the page's network payload.
+    sourcemap: true,
   },
   server: {
     port,

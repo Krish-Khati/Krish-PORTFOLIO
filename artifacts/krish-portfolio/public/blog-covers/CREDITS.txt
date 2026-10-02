@@ -1,5 +1,7 @@
 Blog cover photos — all CC0 (public domain) from StockSnap via Openverse. No attribution required; credited here anyway.
 
+Each cover has two files: the .jpg is the original upload and is what social previews use; the .webp is a WebP re-encode made at build time for on-page <img> tags.
+
 learning-to-code-with-just-a-laptop.jpg — "Laptop Computer" by Startup Stock Photos — https://stocksnap.io/photo/laptop-computer-4O4FZUVSIU
 python-c-and-cpp-what-each-one-taught-me.jpg — "Coding Programming" by Ilya Pavlov — https://stocksnap.io/photo/coding-programming-U3W2SHOLWQ
 what-a-memory-match-game-taught-me-about-state.jpg — "Playing Cards" by Tosa Vlad — https://stocksnap.io/photo/playing-cards-C8301OWBND
