@@ -132,7 +132,7 @@ button { font: inherit; }
   position: relative; min-height: min(900px, 100dvh); display: grid; align-items: center;
   overflow: hidden; isolation: isolate; background: #101c20;
 }
-.hero-video { position: absolute; inset: 0; z-index: -3; width: 100%; height: 100%; object-fit: cover; object-position: 58% center; filter: saturate(.6) contrast(1.08); transform: scale(1.04); }
+.hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 58% center; filter: saturate(.6) contrast(1.08); }
 
 .hero-content { position: relative; z-index: 1; max-width: 760px; padding: clamp(130px, 18vh, 160px) clamp(20px, 8vw, 124px) 80px; font-family: 'Inter', sans-serif; }
 .hero-greet {
@@ -161,19 +161,19 @@ button { font: inherit; }
 .typewriter-text { color: #eeeeee; font-family: 'Inter', sans-serif; font-size: inherit; font-weight: 500; letter-spacing: .01em; }
 .typewriter-cursor { display: inline-block; margin-left: 3px; color: #2ecc71; font-weight: 400; animation: cursorBlink .5s step-end infinite; }
 
-.hero-anim { opacity: 0; animation-fill-mode: both; animation-timing-function: cubic-bezier(.22,.68,.32,1); }
-.hero-anim-1 { animation-name: heroRise15; animation-duration: .6s; animation-delay: .1s; }
-.hero-anim-3 { animation-name: heroRise15; animation-duration: .6s; animation-delay: .9s; }
-.hero-anim-4 { animation-name: heroRise15; animation-duration: .6s; animation-delay: 1.1s; }
-.hero-anim-5 { animation-name: heroPop; animation-duration: .5s; animation-delay: 1.3s; }
+.hero-anim { opacity: 1; animation-fill-mode: both; animation-timing-function: cubic-bezier(.22,.68,.32,1); }
+.hero-anim-1 { animation-name: heroRise15; animation-duration: .5s; animation-delay: .05s; }
+.hero-anim-3 { animation-name: heroRise15; animation-duration: .5s; animation-delay: .1s; }
+.hero-anim-4 { animation-name: heroRise15; animation-duration: .5s; animation-delay: .15s; }
+.hero-anim-5 { animation-name: heroPop; animation-duration: .5s; animation-delay: .2s; }
 
 .name-letters { display: inline-block; }
-.name-letter { display: inline-block; opacity: 0; animation-name: heroRise30; animation-duration: .7s; animation-timing-function: cubic-bezier(.22,.68,.32,1); animation-fill-mode: both; }
+.name-letter { display: inline-block; opacity: 1; animation-name: heroRise30; animation-duration: .6s; animation-timing-function: cubic-bezier(.22,.68,.32,1); animation-fill-mode: both; }
 .name-dots { display: inline-block; margin-left: 5px; }
 .name-dot { display: inline-block; color: #2ecc71; opacity: .5; animation-name: dotBounce; animation-duration: 1.2s; animation-timing-function: ease-in-out; animation-fill-mode: both; animation-iteration-count: infinite; }
-.name-dots .name-dot:nth-child(1) { animation-delay: 1.05s; }
-.name-dots .name-dot:nth-child(2) { animation-delay: 1.17s; }
-.name-dots .name-dot:nth-child(3) { animation-delay: 1.29s; }
+.name-dots .name-dot:nth-child(1) { animation-delay: .3s; }
+.name-dots .name-dot:nth-child(2) { animation-delay: .36s; }
+.name-dots .name-dot:nth-child(3) { animation-delay: .42s; }
 
 @keyframes heroRise15 { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes heroRise30 { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
@@ -643,12 +643,66 @@ button { font: inherit; }
 .back-to-top svg { animation: arrowNudge 1.6s ease-in-out infinite; }
 @keyframes arrowNudge { 0%, 100% { transform: translateY(1px); } 50% { transform: translateY(-3px); } }
 
-/* Hero: parallax video, particle canvas, name shine, button sheen */
+/* ============ Hero cinematics ============
+   The preloaded still is the whole background; there is no video. Entrance, Ken Burns zoom, glow, sweep,
+   vignette and bokeh animate transform/opacity only (compositor-friendly, zero layout shift). Mouse-depth
+   offsets come from CSS vars on `.hero` set by HeroMedia, applied only while `.has-depth` (fine pointer,
+   no reduced motion). `--hero-py` keeps the existing scroll parallax on the image itself. */
 .hero-video { translate: 0 var(--hero-py, 0px); }
-/* The poster's <picture> wrapper must stay out of the hero grid, like the absolutely positioned video it replaces. */
-.hero picture, .seo-hero picture { position: absolute; inset: 0; z-index: -3; display: block; overflow: hidden; }
-.hero-video-clip { opacity: 0; transition: opacity .8s ease; }
-.hero-video-clip.is-playing { opacity: 1; }
+.has-depth .hero-fx {
+  transform: translate3d(var(--dep-img-x, 0px), var(--dep-img-y, 0px), 0);
+  will-change: transform;
+}
+.hero-fx { position: absolute; inset: 0; z-index: -3; overflow: hidden; pointer-events: none; }
+/* The picture inside the fx layer stays absolutely positioned, like the video it replaced. */
+.hero-fx-kenburns picture, .seo-hero picture { position: absolute; inset: 0; display: block; overflow: hidden; }
+/* 1) Entrance: scale-down + drift from the right. The image stays fully visible from first paint (opacity 1
+   in both base and keyframes, no delay) so it is the LCP from frame one; only transform animates. The -2%
+   overscan lets the Ken Burns translate keep the image covering the hero edge to edge. */
+.hero-fx-kenburns {
+  position: absolute; inset: -2%; display: block;
+  opacity: 1; transform: translate3d(34px, 0, 0) scale(1.06);
+  animation: heroIn .45s cubic-bezier(.18,.62,.28,1) both;
+}
+@keyframes heroIn {
+  from { transform: translate3d(34px, 0, 0) scale(1.06); }
+  to { transform: translate3d(0, 0, 0) scale(1); }
+}
+/* 2) Ken Burns: a very slow push-in that breathes back out (starts after the entrance settles). */
+.hero-fx-kenburns .hero-video {
+  will-change: transform;
+  animation: heroKenBurns 16s ease-in-out 1.15s infinite alternate;
+}
+@keyframes heroKenBurns {
+  0%, 100% { transform: scale(1) translate3d(0, 0, 0); }
+  50% { transform: scale(1.05) translate3d(-9px, -11px, 0); }
+}
+/* 4a) Soft green backlight behind the subject; pulses opacity only. */
+.hero-glow {
+  position: absolute; right: 8%; top: 14%; width: 36%; height: 74%;
+  background: radial-gradient(closest-side, rgba(46,204,113,.38), rgba(46,204,113,.14) 55%, transparent 74%);
+  mix-blend-mode: screen; opacity: .26; pointer-events: none;
+  animation: heroGlowPulse 5s ease-in-out 1.4s infinite;
+}
+@keyframes heroGlowPulse { 0%, 100% { opacity: .26; } 50% { opacity: .5; } }
+/* 4b) A faint diagonal highlight sweeping across the image every ~8s. */
+.hero-sweep {
+  position: absolute; top: -15%; bottom: -15%; left: 0; width: 55%;
+  background: linear-gradient(105deg, transparent, rgba(160,255,205,.13) 40%, rgba(190,255,220,.2) 50%, transparent 72%);
+  mix-blend-mode: screen; opacity: 0; pointer-events: none;
+  transform: translateX(-130%) skewX(-12deg);
+  animation: heroSweep 8s ease-in-out 2.6s infinite;
+}
+@keyframes heroSweep {
+  0%, 58% { transform: translateX(-130%) skewX(-12deg); opacity: 0; }
+  64% { opacity: .5; }
+  78%, 100% { transform: translateX(360%) skewX(-12deg); opacity: 0; }
+}
+/* 4c) Left-edge fade so the image melts into the dark background behind the headline. */
+.hero-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(7,17,20,.66), transparent 40%);
+}
 .route-fallback { min-height: 100dvh; background: #071114; }
 /* Sections scrolled out of view stop their looping animations (toggled by SiteEffects). */
 .is-offscreen, .is-offscreen *, .is-offscreen *::before, .is-offscreen *::after { animation-play-state: paused !important; }
@@ -658,6 +712,39 @@ button { font: inherit; }
               linear-gradient(180deg, transparent 60%, rgba(13,13,13,.9));
 }
 .hero-particles { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+/* 3) Mouse depth: the particle canvas drifts more than the image, the text barely moves. */
+.has-depth .hero-particles {
+  transform: translate3d(var(--dep-par-x, 0px), var(--dep-par-y, 0px), 0);
+  will-change: transform;
+}
+.has-depth .hero-content {
+  transform: translate3d(var(--dep-txt-x, 0px), var(--dep-txt-y, 0px), 0);
+  will-change: transform;
+}
+/* 5) Floating specks in front of the image. CSS-only: transform + opacity. */
+.hero-bokeh {
+  position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; overflow: hidden; pointer-events: none; contain: strict;
+}
+.hero-bokeh-dot {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(190,255,220,.95), rgba(46,204,113,.5) 55%, transparent 100%);
+  box-shadow: 0 0 8px rgba(46,204,113,.5);
+  opacity: 0;
+  animation: heroBokehFloat 12s linear infinite;
+}
+@keyframes heroBokehFloat {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  12% { opacity: var(--bokeh-o, .5); }
+  82% { opacity: var(--bokeh-o, .5); }
+  100% { transform: translate3d(var(--bokeh-drift, 0px), -110vh, 0); opacity: 0; }
+}
+/* Freeze the looping film layers while the tab is hidden (HeroMedia toggles `.anim-hidden` on `.hero`). */
+.anim-hidden .hero-glow,
+.anim-hidden .hero-sweep,
+.anim-hidden .hero-fx-kenburns .hero-video,
+.anim-hidden .hero-bokeh,
+.anim-hidden .hero-bokeh-dot,
+.anim-hidden .hero-particles { animation-play-state: paused !important; }
 /* The green shine sweeps across the name letter by letter. Each letter carries a green copy of itself
    (::after) that fades in and out, so the loop only animates opacity and stays on the compositor. */
 .hero-name .name-letter { position: relative; color: #fff; }
@@ -1070,6 +1157,7 @@ button { font: inherit; }
   .story-heading { font-size: 28px; }
   .story-paragraph { font-size: 16px; }
   .tools-grid { grid-template-columns: repeat(3, 1fr); row-gap: 40px; }
+  .hero-bokeh-dot:nth-child(n+9) { display: none; }
 }
 @media (max-width: 620px) {
   .tools-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1087,7 +1175,10 @@ button { font: inherit; }
   .blog-anim { opacity: 1 !important; animation: none !important; }
   .hero-name .name-letter::after { display: none; }
   .btn-primary::after { display: none; }
-  .hero-particles, .scroll-progress { display: none; }
+  .hero-particles, .scroll-progress, .hero-glow, .hero-sweep, .hero-bokeh { display: none; }
+  /* The entrance and Ken Burns collapse to a static, instantly-visible image. */
+  .hero-fx-kenburns, .hero-fx-kenburns .hero-video { animation: none !important; }
+  .hero-fx-kenburns { opacity: 1 !important; transform: none !important; }
 }
 /* ---------- SEO additions: inline links, FAQ, related posts, projects page ---------- */
 .post-p a, .post-list a, .post-quote a {

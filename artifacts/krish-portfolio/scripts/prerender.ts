@@ -110,9 +110,9 @@ function blocksHtml(blocks: BlogBlock[]) {
 // The same poster the React hero shows (see HeroMedia), in the static HTML so it can paint — and count as
 // the LCP — before any JavaScript has run. React swaps in the real hero and reuses the cached image.
 const heroPoster = `<div class="seo-hero" aria-hidden="true"><picture>
-<source type="image/avif" srcset="/media/krish-hero-poster-1280.avif 1280w, /media/krish-hero-poster-1920.avif 1920w" sizes="100vw" />
-<source type="image/webp" srcset="/media/krish-hero-poster-1280.webp 1280w, /media/krish-hero-poster-1920.webp 1920w" sizes="100vw" />
-<img class="hero-video" src="/media/krish-hero-poster-1280.jpg" srcset="/media/krish-hero-poster-1280.jpg 1280w, /media/krish-hero-poster-1920.jpg 1920w" sizes="100vw" width="1280" height="720" alt="" fetchpriority="high" decoding="async" />
+<source type="image/avif" srcset="/media/krish-hero-poster-480.avif 480w, /media/krish-hero-poster-768.avif 768w, /media/krish-hero-poster-1200.avif 1200w, /media/krish-hero-poster-1600.avif 1600w" sizes="100vw" />
+<source type="image/webp" srcset="/media/krish-hero-poster-480.webp 480w, /media/krish-hero-poster-768.webp 768w, /media/krish-hero-poster-1200.webp 1200w, /media/krish-hero-poster-1600.webp 1600w" sizes="100vw" />
+<img class="hero-video" src="/media/krish-hero-poster-768.jpg" srcset="/media/krish-hero-poster-480.jpg 480w, /media/krish-hero-poster-768.jpg 768w, /media/krish-hero-poster-1200.jpg 1200w, /media/krish-hero-poster-1600.jpg 1600w" sizes="100vw" width="1600" height="900" alt="" fetchpriority="high" decoding="async" />
 </picture><div class="hero-overlay"></div></div>`;
 
 function homeBody({ posts, projects, settings, ticker }: SiteData) {

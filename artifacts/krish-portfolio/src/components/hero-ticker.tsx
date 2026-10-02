@@ -1,6 +1,6 @@
-import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react';
-import { useTicker } from '@/data/live';
-import type { TickerItem } from '@/data/ticker';
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useTicker } from "@/data/live";
+import type { TickerItem } from "@/data/ticker";
 
 const SPEED = 32; // px per second
 
@@ -18,7 +18,7 @@ function MarqueeRow({ items }: { items: TickerItem[] }) {
   const [duration, setDuration] = useState(60);
   const [delay, setDelay] = useState(0);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const row = rowRef.current;
     const set = setRef.current;
     if (!row || !set) return;
@@ -29,7 +29,11 @@ function MarqueeRow({ items }: { items: TickerItem[] }) {
       const groupWidth = setWidth * next;
       // Start the loop part-way through so the first item sits just inside the faded edge
       // instead of beginning half-hidden under it.
-      const fade = ((parseFloat(getComputedStyle(row).getPropertyValue('--ticker-fade')) || 0) / 100) * row.clientWidth;
+      const fade =
+        ((parseFloat(getComputedStyle(row).getPropertyValue("--ticker-fade")) ||
+          0) /
+          100) *
+        row.clientWidth;
       setReps(next);
       setDuration(groupWidth / SPEED);
       setDelay(-(groupWidth - fade) / SPEED);
@@ -46,11 +50,19 @@ function MarqueeRow({ items }: { items: TickerItem[] }) {
   const group = (g: number) => (
     <div className="ticker-group" key={g}>
       {Array.from({ length: reps }, (_, s) => (
-        <div className="ticker-set" key={s} ref={g === 0 && s === 0 ? setRef : undefined}>
+        <div
+          className="ticker-set"
+          key={s}
+          ref={g === 0 && s === 0 ? setRef : undefined}
+        >
           {items.map((item, i) => (
             <span className="ticker-item" key={i}>
               {item.label}
-              <svg className="ticker-sep" viewBox="0 0 10 10" aria-hidden="true">
+              <svg
+                className="ticker-sep"
+                viewBox="0 0 10 10"
+                aria-hidden="true"
+              >
                 <path d="M5 0 6.1 3.9 10 5 6.1 6.1 5 10 3.9 6.1 0 5 3.9 3.9Z" />
               </svg>
             </span>
@@ -64,7 +76,12 @@ function MarqueeRow({ items }: { items: TickerItem[] }) {
     <div className="ticker-row" ref={rowRef} aria-hidden="true">
       <div
         className="ticker-track"
-        style={{ '--ticker-duration': `${duration.toFixed(2)}s`, animationDelay: `${delay.toFixed(2)}s` } as CSSProperties}
+        style={
+          {
+            "--ticker-duration": `${duration.toFixed(2)}s`,
+            animationDelay: `${delay.toFixed(2)}s`,
+          } as CSSProperties
+        }
       >
         {group(0)}
         {group(1)}
@@ -78,12 +95,21 @@ export function HeroTicker() {
   if (!data) return null;
 
   return (
-    <div className={`ticker${isPlaceholderData ? ' is-loading' : ''}`} role="region" aria-label="Krish focus areas">
+    <div
+      className={`ticker${isPlaceholderData ? " is-loading" : ""}`}
+      role="region"
+      aria-label="Krish focus areas"
+    >
       <ul className="visually-hidden">
-        {data.items.map((item) => <li key={item.id}>{item.label}</li>)}
+        {data.items.map((item) => (
+          <li key={item.id}>{item.label}</li>
+        ))}
       </ul>
       {/* Remount once the real items arrive, so the loop starts fresh as the band fades in. */}
-      <MarqueeRow key={isPlaceholderData ? 'loading' : 'ready'} items={data.items} />
+      <MarqueeRow
+        key={isPlaceholderData ? "loading" : "ready"}
+        items={data.items}
+      />
     </div>
   );
 }

@@ -36,7 +36,8 @@ export function HeroParticles() {
         canvas.width = w * dpr;
         canvas.height = h * dpr;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const count = Math.min(70, Math.round((w * h) / 16000));
+        const mobile = window.matchMedia("(max-width: 768px)").matches;
+        const count = mobile ? 26 : Math.min(70, Math.round((w * h) / 16000));
         dots = Array.from({ length: count }, () => ({
           x: Math.random() * w,
           y: Math.random() * h,
@@ -133,8 +134,8 @@ export function HeroParticles() {
 
     const hasRic = typeof window.requestIdleCallback === "function";
     const schedule = () => {
-      if (hasRic) idle = window.requestIdleCallback(run, { timeout: 1600 });
-      else idle = window.setTimeout(run, 1600);
+      if (hasRic) idle = window.requestIdleCallback(run, { timeout: 1200 });
+      else idle = window.setTimeout(run, 1200);
     };
     schedule();
 
