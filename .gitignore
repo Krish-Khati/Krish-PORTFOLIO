@@ -55,3 +55,6 @@ Thumbs.db
 
 .vercel
 .env*
+
+# original (uncompressed) media kept out of git; only the processed files in public/ are tracked
+artifacts/krish-portfolio/media-src/
