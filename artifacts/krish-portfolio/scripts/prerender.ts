@@ -117,7 +117,7 @@ const heroPoster = `<div class="seo-hero" aria-hidden="true"><picture>
 
 function homeBody({ posts, projects, settings, ticker }: SiteData) {
   return `${settings.heroImage ? '' : heroPoster}<main class="seo-static">${nav}
-<h1>${e(settings.name)} — aspiring software developer</h1>
+<h1>${e(settings.name)} — AI developer</h1>
 <p>${e(settings.tagline)}</p>
 <ul>${ticker.items.map((i) => `<li>${e(i.label)}</li>`).join('')}</ul>
 <h2>Small town. Big intent.</h2>

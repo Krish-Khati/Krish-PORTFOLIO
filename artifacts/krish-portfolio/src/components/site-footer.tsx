@@ -3,7 +3,7 @@ import { Link } from "wouter";
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <span>Krish / aspiring software developer</span>
+      <span>Krish / AI developer</span>
       <span className="footer-links">
         <Link href="/blog" className="footer-link">
           Blog

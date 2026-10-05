@@ -452,7 +452,7 @@ function Home() {
                   src={resizedImage(settings.aboutPhoto, 700)}
                   srcSet={imageSrcSet(settings.aboutPhoto, [400, 700, 1000])}
                   sizes="(max-width: 900px) 80vw, 420px"
-                  alt="Krish, aspiring software developer from Pundri, Haryana"
+                  alt="Krish, AI developer from Pundri, Haryana"
                   loading="lazy"
                   decoding="async"
                 />

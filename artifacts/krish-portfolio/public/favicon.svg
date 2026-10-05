@@ -1,3 +1,27 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Krish">
+  <!-- Rounded square (r = 22% of 512) with a dark navy to deep indigo gradient. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B0F1A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="k" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="113" ry="113" fill="url(#bg)"/>
+
+  <!-- Bold K drawn as one path (stem + upper arm + lower leg) so the gradient has no overlap seam
+       and nothing depends on an installed font. All three subpaths wind clockwise and are combined
+       with the default nonzero fill rule, so they read as a single silhouette. -->
+  <path fill="url(#k)" d="
+    M170 138 H228 V374 H170 Z
+    M214 138 H344 L268 256 H214 Z
+    M214 256 H268 L344 374 H214 Z
+  "/>
+
+  <!-- AI sparkle, top-right, clear of the K. -->
+  <path fill="#22D3EE" d="M402 74 Q402 110 438 110 Q402 110 402 146 Q402 110 366 110 Q402 110 402 74 Z"/>
 </svg>

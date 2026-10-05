@@ -12,6 +12,28 @@ so the full evolution of the site is visible at a glance.
 
 ## Daily Updates
 
+### 2026-10-05 — Identity: "AI Developer", and a new favicon
+
+**Title / description**
+- `src/seo/site.ts`: `DEFAULT_TITLE` is now `Krish | AI Developer` (was "Krish — Aspiring Software Developer"), and `DEFAULT_DESCRIPTION` is now "Krish - AI Developer building AI-powered apps, chatbots and assistants with Python and modern AI tools." The default OG image alt dropped the old wording too.
+- `src/seo/meta.ts`: Person `jobTitle` is now "AI Developer". `og:title` and `twitter:title` are derived from `meta.title`, so the one constant covers all three. The browser and the build-time prerender share `src/seo/site.ts`, so the static HTML can't drift from the client.
+- `artifacts/krish-portfolio/index.html`: the fallback `<title>`, `og:title`, `twitter:title`, `description`, `og:description` and `twitter:description` updated to match, so the tags are right even before/without the prerender.
+- Same wording wherever it was user-visible: footer ("Krish / AI developer"), the prerendered static `<h1>`, the about photo alt text, `public/llms.txt`, `public/media/krish-resume.md` and the Replit `artifact.toml` description.
+- AI personas: `scripts/src/auto-blog-post.ts` (`PERSONA`) and `scripts/src/seo-backfill.ts` (`buildPrompt`) now describe Krish as an AI developer building AI-powered apps, chatbots and assistants. The "beginner" wording in both prompts is left alone on purpose — there it describes the *searcher* picking a long-tail keyword, not Krish, so changing it would break the targeting logic.
+
+**Favicon**
+- `public/favicon.svg` rewritten in place at the same path (so the existing link stays valid): 512×512 viewBox, rounded square (r = 22%) with a `#0B0F1A → #1E1B4B` gradient, a bold cyan→violet "K" drawn as real path geometry rather than a font glyph, and a cyan AI sparkle in the top-right. The K stays legible at 16×16.
+- Rasters generated from that SVG with `pnpm dlx @resvg/resvg-js-cli` (not added to `package.json`): `favicon.png` 512, `favicon-32.png` 32, `apple-touch-icon.png` 180, plus a `favicon.ico` wrapping the 32px PNG.
+- The two PNGs keep transparent corners so the rounding shows; the apple-touch-icon is opaque because iOS applies its own mask and would otherwise render notches.
+- `index.html`: the single `<link rel="icon">` became five — SVG, PNG 32, PNG 512, apple-touch-icon and the `.ico` — each with `?v=2` to bypass the browser/CDN cache (no `vercel.json` header covers favicons). `prerender.ts` only rewrites the `<!--seo-head-->` block, so the links carry to every prerendered page from one edit.
+
+**Sitemap**: unchanged by hand — `scripts/prerender.ts` regenerates `sitemap.xml` (now 15 URLs) with each page's `lastmod`, and production builds ping IndexNow with whatever is new or changed versus the live sitemap.
+
+**Verification**
+- `pnpm --filter @workspace/krish-portfolio run typecheck` ✅, `pnpm --filter @workspace/scripts run typecheck` ✅ (the portfolio filter doesn't cover `scripts/`), `vite build` + prerender ✅ (15 URLs, robots/rss written).
+- Built HTML checked: `<title>Krish | AI Developer</title>` on `/`; per-page titles unchanged on `/blog`, `/projects` and their children; exactly 5 icon links, all with `?v=2`, on every generated page including `spa.html`.
+- Favicon geometry verified by decoding the PNGs and rendering the pixels as ASCII (image preview isn't available in this session): correct K silhouette, sparkle clear of it, and the K still readable as a K at 16×16.
+
 ### 2026-09-29 (3) — Supabase MCP + database rules
 
 - `.mcp.json`: connects Claude Code to the portfolio's Supabase project through the Supabase MCP server (OAuth login, no credentials in the repo).

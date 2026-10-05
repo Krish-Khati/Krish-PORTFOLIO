@@ -1,7 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "Krish Portfolio"
-description = "A cinematic, responsive personal portfolio for Krish, an aspiring software developer, featuring a full-bleed video hero, interactive project showcase, skills, and contact call-to-action."
+description = "A cinematic, responsive personal portfolio for Krish, an AI developer, featuring a full-bleed video hero, interactive project showcase, skills, and contact call-to-action."
 version = "1.0.0"
 id = "artifacts/krish-portfolio"
 router = "path"

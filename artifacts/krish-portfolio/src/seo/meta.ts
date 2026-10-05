@@ -78,7 +78,7 @@ function personJsonLd(s: PublicSettings): JsonLd {
     ...(s.aboutPhoto && !s.aboutPhoto.startsWith("data:")
       ? { image: absoluteUrl(s.aboutPhoto) }
       : {}),
-    jobTitle: "Aspiring Software Developer",
+    jobTitle: "AI Developer",
     description: s.tagline,
     ...(parts.length >= 2
       ? {

@@ -1,6 +1,6 @@
 # KRISH
 
-*Aspiring Software Developer*
+*AI Developer*
 
 Pundri, Kaithal, Haryana | dhimankrish10@gmail.com | +91 93060 91154 | [github.com/KRRISH972](https://github.com/KRRISH972)
 

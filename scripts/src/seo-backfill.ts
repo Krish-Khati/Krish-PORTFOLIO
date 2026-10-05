@@ -71,7 +71,8 @@ function postText(blocks: Block[]) {
 
 function buildPrompt(post: PostRow) {
   return [
-    'You are an SEO assistant for the personal blog of Krish, a self-taught aspiring software developer from Haryana, India.',
+    'You are an SEO assistant for the personal blog of Krish, an AI developer from Haryana, India who builds ' +
+      'AI-powered apps, chatbots and assistants with Python and modern AI tools.',
     'Write SEO fields for the EXISTING blog post below. Base everything ONLY on what the post says — never invent facts, ',
     'numbers, jobs, credentials or experiences about Krish.',
     '',
