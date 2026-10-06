@@ -115,7 +115,7 @@ const starter: StarterRow[] = [
     github_url: 'https://github.com/KRRISH972/FITNESS_TEMPLE',
     live_url: 'https://fitness-temple-k0r76nt7c-kisshu1.vercel.app/',
     tech_stack: ['Web Design', 'Responsive Design', 'React', 'Gym Website', 'UI/UX'],
-    gallery: [shot('/projects/fitness-temple.png', 'Fitness Temple - Gym Website Homepage Screenshot showing hero section and programs', 1440, 1000)],
+    gallery: [shot('/projects/fitness-temple.png', 'Fitness Temple gym website design hero section with Unleash Your Inner Power headline and Explore Programs CTA', 1440, 1000)],
   },
   {
     name: 'Memory Match Game',
