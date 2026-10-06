@@ -6,7 +6,7 @@ export const SITE_URL = 'https://krish-portfolio-dev.vercel.app';
 export const SITE_NAME = 'Krish';
 export const DEFAULT_TITLE = 'Krish | AI Developer';
 export const DEFAULT_DESCRIPTION =
-  'Krish - AI Developer building AI-powered apps, chatbots and assistants with Python and modern AI tools.';
+  'Krish - AI Developer building AI-powered apps, chatbots and web projects: gym website design, memory match game, AI language translator and calculator app UI.';
 
 /** 1200×630 green/dark share image used when a page has no cover of its own. */
 export const DEFAULT_OG_IMAGE = '/og-default.png';

@@ -14,8 +14,7 @@ select * from (values
   ('Fitness Temple', 'A fitness-themed website built to practice front-end structure, content hierarchy, and styling.', 'https://github.com/KRRISH972/FITNESS_TEMPLE', 0),
   ('LinguaBridge', 'A language-learning and translation project exploring the small details that help communication travel.', 'https://github.com/KRRISH972/LINGUABRIDGE-', 1),
   ('Memory Match Game', 'An interactive memory game built around logic, state changes, and event-driven programming.', 'https://github.com/KRRISH972/MEMORY-MATCH', 2),
-  ('Calculator', 'A functional calculator application focused on core programming logic and arithmetic operations.', '', 3),
-  ('M2F Gym Website', 'A clean gym and fitness business website designed to present services and information clearly.', '', 4)
+  ('Calculator', 'A functional calculator application focused on core programming logic and arithmetic operations.', '', 3)
 ) as v(name, description, url, position)
 where not exists (select 1 from projects);
 

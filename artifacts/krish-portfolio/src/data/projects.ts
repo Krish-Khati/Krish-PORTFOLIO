@@ -65,7 +65,8 @@ export function projectFromRow(row: Record<string, unknown>, index: number): Pro
   const name = str(row.name);
   const legacyUrl = str(row.url).trim();
   const githubUrl = str(row.github_url).trim() || (isGithub(legacyUrl) ? legacyUrl : '');
-  const liveUrl = str(row.live_url).trim() || (legacyUrl && !isGithub(legacyUrl) && legacyUrl !== githubUrl ? legacyUrl : '');
+  const rawLiveUrl = str(row.live_url).trim() || (legacyUrl && !isGithub(legacyUrl) && legacyUrl !== githubUrl ? legacyUrl : '');
+  const liveUrl = rawLiveUrl === '#' ? '' : rawLiveUrl;
   let gallery = galleryFromJson(row.gallery);
   const legacyImage = str(row.image).trim();
   if (!gallery.length && legacyImage) gallery = [{ url: legacyImage, alt: '', caption: '' }];
@@ -92,13 +93,57 @@ export function projectFromRow(row: Record<string, unknown>, index: number): Pro
 /** The projects for the home page section: the featured ones, or all of them if none are featured. */
 export const homeProjects = (all: Project[]) => (all.some((p) => p.featured) ? all.filter((p) => p.featured) : all);
 
-// Starter content, used when Supabase isn't configured.
-const starter = (name: string, description: string, url: string) => ({ name, description, url });
+const shot = (url: string, alt: string, width: number, height: number): GalleryImage => ({ url, alt, caption: '', width, height });
 
-export const projects: Project[] = [
-  starter('Fitness Temple', 'A fitness-themed website built to practice front-end structure, content hierarchy, and styling.', 'https://github.com/KRRISH972/FITNESS_TEMPLE'),
-  starter('LinguaBridge', 'A language-learning and translation project exploring the small details that help communication travel.', 'https://github.com/KRRISH972/LINGUABRIDGE-'),
-  starter('Memory Match Game', 'An interactive memory game built around logic, state changes, and event-driven programming.', 'https://github.com/KRRISH972/MEMORY-MATCH'),
-  starter('Calculator', 'A functional calculator application focused on core programming logic and arithmetic operations.', ''),
-  starter('M2F Gym Website', 'A clean gym and fitness business website designed to present services and information clearly.', ''),
-].map((row, i) => projectFromRow(row, i));
+type StarterRow = {
+  name: string;
+  description: string;
+  meta_description?: string;
+  github_url?: string;
+  live_url?: string;
+  tech_stack?: string[];
+  gallery?: GalleryImage[];
+};
+
+// Starter content, used when Supabase isn't configured.
+const starter: StarterRow[] = [
+  {
+    name: 'Fitness Temple',
+    description:
+      'A modern, high-energy gym website for "Fitness Temple" featuring a hero section, programs/disciplines showcase, stats bar (ratings, members, years active), and a sleek black-and-red themed UI with smooth navigation.',
+    meta_description: 'Gym website design for Fitness Temple: hero section, programs showcase, stats bar and a sleek black-and-red themed UI.',
+    github_url: 'https://github.com/KRRISH972/FITNESS_TEMPLE',
+    live_url: 'https://fitness-temple-k0r76nt7c-kisshu1.vercel.app/',
+    tech_stack: ['Web Design', 'Responsive Design', 'React', 'Gym Website', 'UI/UX'],
+    gallery: [shot('/projects/fitness-temple.png', 'Fitness Temple - Gym Website Homepage Screenshot showing hero section and programs', 1440, 1000)],
+  },
+  {
+    name: 'Memory Match Game',
+    description:
+      'An interactive memory-matching arcade game with a modern gradient UI, built with real-time audio components and an engaging "Launch Arcade" entry screen.',
+    meta_description: 'Memory match game arcade with a modern gradient UI, real-time audio and an engaging "Launch Arcade" entry screen.',
+    github_url: 'https://github.com/KRRISH972/MEMORY-MATCH',
+    live_url: 'https://memory-match-ashy.vercel.app/',
+    tech_stack: ['Game Development', 'JavaScript', 'Browser Game', 'UI/UX'],
+    gallery: [shot('/projects/memory-match.png', 'Memory Match - Browser Based Memory Arcade Game Launch Screen', 1440, 1000)],
+  },
+  {
+    name: 'LinguaBridge',
+    description: 'An AI-powered language translation tool that bridges communication across languages using AI.',
+    meta_description: 'AI language translator that bridges communication across languages using AI, built by Krish.',
+    github_url: 'https://github.com/KRRISH972/LINGUABRIDGE-',
+    live_url: 'https://linguabridge.ai.studio',
+    tech_stack: ['AI', 'NLP', 'Translation', 'Web App'],
+  },
+  {
+    name: 'Calculator',
+    description:
+      'A sleek, modern calculator app with a dark-themed UI, circular button design, and smooth interactions for basic arithmetic operations.',
+    meta_description: 'Calculator app UI with a dark theme, circular buttons and smooth interactions for basic arithmetic operations.',
+    live_url: '#',
+    tech_stack: ['JavaScript', 'UI Design', 'Calculator App'],
+    gallery: [shot('/projects/calculator.png', 'Calculator App - Dark Theme UI with Circular Buttons', 600, 333)],
+  },
+];
+
+export const projects: Project[] = starter.map((row, i) => projectFromRow(row, i));

@@ -800,6 +800,12 @@ button { font: inherit; }
 }
 .footer-link { color: #2ecc71; transition: color .2s ease; }
 .footer-link:hover { color: #ffffff; }
+.footer-socials { display: inline-flex; align-items: center; gap: 10px; }
+.footer-social {
+  display: grid; place-items: center;
+  color: #2ecc71; transition: color .2s ease, transform .2s ease;
+}
+.footer-social:hover { color: #ffffff; transform: translateY(-2px); }
 
 /* ---------- Blog ---------- */
 .blog-shell {

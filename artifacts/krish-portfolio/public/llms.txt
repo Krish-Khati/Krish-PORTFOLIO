@@ -1,6 +1,6 @@
 # Krish | AI Developer
 
-> Krish - AI Developer building AI-powered apps, chatbots and assistants with Python and modern AI tools. Currently looking for an entry-level role or internship.
+> Krish - AI Developer building AI-powered apps, chatbots and web projects: gym website design, memory match game, AI language translator and calculator app UI. Currently looking for an entry-level role or internship.
 
 The site is a single-page app with prerendered HTML for every public page. Content may be summarized and cited with a link back to the source page.
 
@@ -16,7 +16,6 @@ The site is a single-page app with prerendered HTML for every public page. Conte
 - [LinguaBridge](https://krish-portfolio-dev.vercel.app/projects/linguabridge)
 - [Fitness Temple](https://krish-portfolio-dev.vercel.app/projects/fitness-temple)
 - [Calculator](https://krish-portfolio-dev.vercel.app/projects/calculator)
-- [M2F Gym Website](https://krish-portfolio-dev.vercel.app/projects/m2f-gym-website)
 
 ## Machine-readable
 
