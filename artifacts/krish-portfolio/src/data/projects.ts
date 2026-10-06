@@ -134,6 +134,7 @@ const starter: StarterRow[] = [
     github_url: 'https://github.com/KRRISH972/LINGUABRIDGE-',
     live_url: 'https://linguabridge.ai.studio',
     tech_stack: ['AI', 'NLP', 'Translation', 'Web App'],
+    gallery: [shot('/projects/linguabridge.png', 'LinguaBridge - AI Translation App Showing Text Translation and Voice Interpreter Panels', 1440, 1000)],
   },
   {
     name: 'Calculator',
