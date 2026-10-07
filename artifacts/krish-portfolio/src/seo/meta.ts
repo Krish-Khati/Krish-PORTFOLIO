@@ -1,5 +1,6 @@
 import type { BlogPost } from "../data/blog";
 import { type Project, projectCover, projectPath } from "../data/projects";
+import { INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "../data/social";
 import type { PublicSettings } from "../data/settings";
 import { escapeHtml, stripInline } from "./inline";
 import {
@@ -102,7 +103,7 @@ function personJsonLd(s: PublicSettings): JsonLd {
       "Digital marketing",
       "SEO",
     ],
-    sameAs: sameAsLinks(s),
+    sameAs: [...new Set([...sameAsLinks(s), INSTAGRAM_PROFILE, LINKEDIN_PROFILE])],
   };
 }
 

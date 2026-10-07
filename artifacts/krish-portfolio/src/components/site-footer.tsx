@@ -1,5 +1,6 @@
 import { Instagram, Linkedin } from "lucide-react";
 import { Link } from "wouter";
+import { INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "@/data/social";
 
 export function SiteFooter() {
   return (
@@ -25,7 +26,7 @@ export function SiteFooter() {
         </a>
         <span className="footer-socials">
           <a
-            href="https://www.instagram.com/krrish_06_"
+            href={INSTAGRAM_PROFILE}
             target="_blank"
             rel="noopener noreferrer"
             className="footer-social"
@@ -34,7 +35,7 @@ export function SiteFooter() {
             <Instagram size={14} aria-hidden="true" />
           </a>
           <a
-            href="https://www.linkedin.com/in/krish-dhiman-09aa14434/"
+            href={LINKEDIN_PROFILE}
             target="_blank"
             rel="noopener noreferrer"
             className="footer-social"
