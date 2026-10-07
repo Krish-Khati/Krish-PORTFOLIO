@@ -70,6 +70,8 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: #071114; }
+/* Anchor targets (#top, #about, #skills, #work, #contact) must clear the fixed navbar. */
+section[id] { scroll-margin-top: 96px; }
 body {
   margin: 0;
   background: #071114;

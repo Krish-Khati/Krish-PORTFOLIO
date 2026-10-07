@@ -207,13 +207,32 @@ function Home() {
 
   useSeo(homeMeta(settings));
 
-  // Arriving from another page with a #hash (e.g. /#contact from the blog): scroll to it once mounted.
+  // Arriving with a #hash (e.g. /#contact from the blog): scroll to it once mounted, then again
+  // after load/fonts settle — late layout shifts above the section would otherwise leave it
+  // off-screen. Plain "/" has no hash, so nothing ever scrolls the hero away.
+  // Re-anchoring stops as soon as the visitor scrolls themselves.
   useEffect(() => {
     const id = window.location.hash.slice(1);
-    if (id)
-      requestAnimationFrame(() =>
-        document.getElementById(id)?.scrollIntoView(),
-      );
+    if (!id) return;
+    let userScrolled = false;
+    const markScrolled = () => {
+      userScrolled = true;
+    };
+    const jump = () => {
+      if (!userScrolled)
+        document.getElementById(id)?.scrollIntoView({ block: "start" });
+    };
+    const raf = requestAnimationFrame(jump);
+    window.addEventListener("load", jump, { once: true });
+    window.addEventListener("wheel", markScrolled, { passive: true });
+    window.addEventListener("touchstart", markScrolled, { passive: true });
+    document.fonts?.ready.then(jump);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("load", jump);
+      window.removeEventListener("wheel", markScrolled);
+      window.removeEventListener("touchstart", markScrolled);
+    };
   }, []);
 
   useEffect(() => {
@@ -364,7 +383,7 @@ function Home() {
             <a href="#work" className="btn-primary">
               View My Work <ArrowRight size={15} />
             </a>
-            <a href="#resume" className="btn-secondary">
+            <a href="/media/krish-resume.md" download className="btn-secondary">
               Download Resume <Download size={14} />
             </a>
           </div>
