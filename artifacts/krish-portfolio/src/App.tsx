@@ -213,7 +213,11 @@ function Home() {
   // Re-anchoring stops as soon as the visitor scrolls themselves.
   useEffect(() => {
     const id = window.location.hash.slice(1);
-    if (!id) return;
+    const entry = performance.getEntriesByType("navigation")[0];
+    // A reload lands at the hero instead: SiteChrome strips the hash and this is a second
+    // guard in case effect order ever changes.
+    if (!id || (entry as PerformanceNavigationTiming | undefined)?.type === "reload")
+      return;
     let userScrolled = false;
     const markScrolled = () => {
       userScrolled = true;
@@ -965,6 +969,61 @@ function SiteChrome() {
       else window.clearTimeout(id);
       window.removeEventListener("pointerdown", finish);
       window.removeEventListener("scroll", finish);
+    };
+  }, [forbid]);
+
+  // Refresh always starts at the top (hero), even mid-page or with a #hash — while back/forward
+  // still restores the position each entry was left at. Native restoration is turned off and
+  // replaced by the save/restore below so the two can't fight each other. Hash URLs are only
+  // stripped on reload; a fresh visit to /#work keeps scrolling to its section.
+  useEffect(() => {
+    if (forbid) return;
+    const entry = performance.getEntriesByType("navigation")[0];
+    const type = (entry as PerformanceNavigationTiming | undefined)?.type;
+
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+    type EntryState = { __scrollY?: number } | null;
+    const saveCurrent = () =>
+      history.replaceState(
+        { ...(history.state as EntryState), __scrollY: Math.round(window.scrollY) },
+        "",
+      );
+
+    if (type === "reload") {
+      if (window.location.hash)
+        history.replaceState(
+          history.state,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      window.scrollTo(0, 0);
+      saveCurrent();
+    } else if (type === "back_forward") {
+      const y = (history.state as EntryState)?.__scrollY;
+      if (typeof y === "number")
+        requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+
+    let ticking = false;
+    const save = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        saveCurrent();
+      });
+    };
+    const restore = (event: PopStateEvent) => {
+      const y = (event.state as EntryState)?.__scrollY;
+      if (typeof y === "number")
+        requestAnimationFrame(() => window.scrollTo(0, y));
+    };
+    window.addEventListener("scroll", save, { passive: true });
+    window.addEventListener("popstate", restore);
+    return () => {
+      window.removeEventListener("scroll", save);
+      window.removeEventListener("popstate", restore);
     };
   }, [forbid]);
 
