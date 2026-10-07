@@ -29,7 +29,7 @@ export default function AdminApp() {
   useEffect(() => {
     document.documentElement.classList.add('admin-mode');
     const prevTitle = document.title;
-    document.title = 'Admin — Krish';
+    document.title = 'Admin — Krish Khati';
     return () => {
       document.documentElement.classList.remove('admin-mode');
       document.title = prevTitle;
@@ -105,7 +105,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="adm-brand">
           <span className="adm-logo">K</span>
           <div>
-            <strong>Krish</strong>
+            <strong>Krish Khati</strong>
             <small>Admin panel</small>
           </div>
           <button type="button" className="adm-icon-btn adm-sidebar-close" onClick={() => setOpen(false)} aria-label="Close menu">

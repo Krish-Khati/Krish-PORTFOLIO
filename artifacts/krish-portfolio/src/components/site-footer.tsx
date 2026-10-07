@@ -5,7 +5,7 @@ import { INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "@/data/social";
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <span>Krish / AI developer</span>
+      <span>Krish Khati / AI developer</span>
       <span className="footer-links">
         <Link href="/blog" className="footer-link">
           Blog
@@ -20,7 +20,7 @@ export function SiteFooter() {
         <a
           href="/rss.xml"
           className="footer-link"
-          aria-label="Krish's blog RSS feed"
+          aria-label="Krish Khati's blog RSS feed"
         >
           RSS
         </a>
@@ -30,7 +30,7 @@ export function SiteFooter() {
             target="_blank"
             rel="noopener noreferrer"
             className="footer-social"
-            aria-label="Krish on Instagram"
+            aria-label="Krish Khati on Instagram"
           >
             <Instagram size={14} aria-hidden="true" />
           </a>
@@ -39,7 +39,7 @@ export function SiteFooter() {
             target="_blank"
             rel="noopener noreferrer"
             className="footer-social"
-            aria-label="Krish on LinkedIn"
+            aria-label="Krish Khati on LinkedIn"
           >
             <Linkedin size={14} aria-hidden="true" />
           </a>

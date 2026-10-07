@@ -5,6 +5,7 @@ import { loadEnv } from 'vite';
 import { blogPosts, type BlogBlock, type BlogPost, formatPostDate, postFromRow, readingMinutes, withCover } from '../src/data/blog';
 import { imageAlt, type Project, projectFromRow, projectPath, projects as staticProjects } from '../src/data/projects';
 import { defaultPublicSettings, type PublicSettings } from '../src/data/settings';
+import { GITHUB_PROFILE } from '../src/data/social';
 import { defaultTicker, type Ticker, tickerFromRows } from '../src/data/ticker';
 import { textToBlocks } from '../src/lib/text-blocks';
 import { escapeHtml, inlineToHtml } from '../src/seo/inline';
@@ -12,7 +13,7 @@ import {
   blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectMeta, projectsMeta,
 } from '../src/seo/meta';
 import { postsMentioningProject, relatedPosts } from '../src/seo/related';
-import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_URL } from '../src/seo/site';
+import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_NAME, SITE_URL } from '../src/seo/site';
 
 /*
  * Runs right after `vite build` (see package.json). The site is a single-page app, so without this
@@ -117,7 +118,7 @@ const heroPoster = `<div class="seo-hero" aria-hidden="true"><picture>
 
 function homeBody({ posts, projects, settings, ticker }: SiteData) {
   return `${settings.heroImage ? '' : heroPoster}<main class="seo-static">${nav}
-<h1>${e(settings.name)} — AI developer</h1>
+<h1>${e(SITE_NAME)} — AI developer</h1>
 <p>${e(settings.tagline)}</p>
 <ul>${ticker.items.map((i) => `<li>${e(i.label)}</li>`).join('')}</ul>
 <h2>Small town. Big intent.</h2>
@@ -132,7 +133,7 @@ function homeBody({ posts, projects, settings, ticker }: SiteData) {
 <h2>Latest from the blog</h2>
 <ul>${posts.slice(0, 5).map((p) => `<li><a href="${postPath(p.slug)}">${e(p.title)}</a> — ${e(p.excerpt)}</li>`).join('')}</ul>
 <h2>Contact</h2>
-<p>${e(settings.location)} · <a href="mailto:${e(settings.email)}">${e(settings.email)}</a> · <a href="${e(settings.github)}">GitHub</a></p>
+<p>${e(settings.location)} · <a href="mailto:${e(settings.email)}">${e(settings.email)}</a> · <a href="${e(GITHUB_PROFILE)}">GitHub</a></p>
 </main>`;
 }
 
@@ -273,7 +274,7 @@ function rssXml({ posts }: SiteData) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>Krish — Blog</title>
+    <title>Krish Khati — Blog</title>
     <link>${absoluteUrl('/blog')}</link>
     <description>Notes from a self-taught developer: learning to code, building projects, AI tools and digital marketing.</description>
     <language>en</language>

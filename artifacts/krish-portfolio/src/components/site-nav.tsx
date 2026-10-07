@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Github, Instagram, Linkedin, Menu, X, Youtube } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useSiteSettings } from '@/data/live';
+import { GITHUB_PROFILE, INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from '@/data/social';
 
 const sections = [
   { id: 'top', label: 'Home' },
@@ -65,10 +66,10 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
         </li>
       </ul>
       <div className="socials">
-        <a href={settings.instagram} target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={16} /></a>
-        <a href={settings.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn"><Linkedin size={16} /></a>
+        <a href={INSTAGRAM_PROFILE} target="_blank" rel="noopener noreferrer" aria-label="Krish Khati on Instagram"><Instagram size={16} /></a>
+        <a href={LINKEDIN_PROFILE} target="_blank" rel="noopener noreferrer" aria-label="Krish Khati on LinkedIn"><Linkedin size={16} /></a>
         <a href={settings.youtube} target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={16} /></a>
-        <a href={settings.github} target="_blank" rel="noreferrer" aria-label="GitHub"><Github size={16} /></a>
+        <a href={GITHUB_PROFILE} target="_blank" rel="noopener noreferrer" aria-label="Krish Khati on GitHub"><Github size={16} /></a>
         <button
           type="button"
           className="nav-toggle"

@@ -1,6 +1,6 @@
 import type { BlogPost } from "../data/blog";
 import { type Project, projectCover, projectPath } from "../data/projects";
-import { INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "../data/social";
+import { INSTAGRAM_PROFILE, GITHUB_PROFILE, LINKEDIN_PROFILE } from "../data/social";
 import type { PublicSettings } from "../data/settings";
 import { escapeHtml, stripInline } from "./inline";
 import {
@@ -51,10 +51,8 @@ export function clip(text: string, max: number) {
 }
 
 /** Social profile URLs worth listing — skips bare placeholders like "https://instagram.com". */
-export function sameAsLinks(
-  s: Pick<PublicSettings, "github" | "linkedin" | "instagram" | "youtube">,
-) {
-  return [s.github, s.linkedin, s.instagram, s.youtube].filter((u) => {
+export function sameAsLinks(s: Pick<PublicSettings, "youtube">) {
+  return [GITHUB_PROFILE, LINKEDIN_PROFILE, INSTAGRAM_PROFILE, s.youtube].filter((u) => {
     try {
       const url = new URL(u);
       return url.pathname.replace(/\/+$/, "").length > 1;
@@ -73,8 +71,8 @@ function personJsonLd(s: PublicSettings): JsonLd {
     "@context": "https://schema.org",
     "@type": "Person",
     "@id": PERSON_ID,
-    name: s.name || SITE_NAME,
-    alternateName: "KRRISH972",
+    name: SITE_NAME,
+    alternateName: "Krrish Dhiman",
     url: SITE_URL,
     ...(s.aboutPhoto && !s.aboutPhoto.startsWith("data:")
       ? { image: absoluteUrl(s.aboutPhoto) }
@@ -103,15 +101,16 @@ function personJsonLd(s: PublicSettings): JsonLd {
       "Digital marketing",
       "SEO",
     ],
-    sameAs: [...new Set([...sameAsLinks(s), INSTAGRAM_PROFILE, LINKEDIN_PROFILE])],
+    sameAs: sameAsLinks(s),
   };
 }
 
-const personRef = (s: PublicSettings) => ({
+const personRef = () => ({
   "@type": "Person",
   "@id": PERSON_ID,
-  name: s.name || SITE_NAME,
+  name: SITE_NAME,
   url: SITE_URL,
+  sameAs: [GITHUB_PROFILE],
 });
 
 function breadcrumbJsonLd(items: { name: string; path: string }[]): JsonLd {
@@ -157,7 +156,7 @@ export function homeMeta(s: PublicSettings): PageMeta {
 export function blogListMeta(posts: BlogPost[], s: PublicSettings): PageMeta {
   return {
     ...defaults,
-    title: "Blog — Krish | Notes on Coding, AI and Learning",
+    title: "Blog — Krish Khati | Notes on Coding, AI and Learning",
     description:
       "Honest notes from a self-taught developer in Haryana: learning Python, C and C++, building projects, using AI tools well, and lessons from digital marketing.",
     path: "/blog",
@@ -166,10 +165,10 @@ export function blogListMeta(posts: BlogPost[], s: PublicSettings): PageMeta {
         "@context": "https://schema.org",
         "@type": "Blog",
         "@id": `${SITE_URL}/blog#blog`,
-        name: "Krish — Blog",
+        name: "Krish Khati — Blog",
         url: absoluteUrl("/blog"),
         inLanguage: "en",
-        author: personRef(s),
+        author: personRef(),
         blogPost: posts.slice(0, 20).map((p) => ({
           "@type": "BlogPosting",
           headline: p.title,
@@ -188,17 +187,17 @@ export function blogListMeta(posts: BlogPost[], s: PublicSettings): PageMeta {
 export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
   return {
     ...defaults,
-    title: "Projects — Krish | Things Built to Learn",
+    title: "Projects — Krish Khati | Things Built to Learn",
     description:
-      "Projects by Krish, a self-taught developer: websites, a memory match game, a language-learning app and more, each built to learn something new. Code on GitHub.",
+      "Projects by Krish Khati, a self-taught developer: websites, a memory match game, a language-learning app and more, each built to learn something new. Code on GitHub.",
     path: "/projects",
     jsonLd: [
       {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
-        name: "Projects by Krish",
+        name: "Projects by Krish Khati",
         url: absoluteUrl("/projects"),
-        author: personRef(s),
+        author: personRef(),
         mainEntity: {
           "@type": "ItemList",
           itemListElement: projects.map((p, i) => ({
@@ -217,14 +216,14 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
   };
 }
 
-export const projectSeoTitle = (p: Project) => `${p.name} – Krish`;
+export const projectSeoTitle = (p: Project) => `${p.name} – Krish Khati`;
 
 export const projectMetaDescription = (p: Project) =>
   clip(
     p.metaDescription.trim() ||
       p.description.trim() ||
       stripInline(p.writeup.split(/\n\s*\n/)[0] ?? "") ||
-      `${p.name}, a project by Krish.`,
+      `${p.name}, a project by Krish Khati.`,
     160,
   );
 
@@ -251,8 +250,8 @@ export function projectMeta(p: Project, s: PublicSettings): PageMeta {
     description,
     url,
     image: [image],
-    author: personRef(s),
-    creator: personRef(s),
+    author: personRef(),
+    creator: personRef(),
     inLanguage: "en",
     isAccessibleForFree: true,
     ...(p.updatedAt ? { dateModified: p.updatedAt } : {}),
@@ -270,8 +269,8 @@ export function projectMeta(p: Project, s: PublicSettings): PageMeta {
             : {}),
         }
       : {}),
-    ...([p.githubUrl, p.liveUrl, p.playStoreUrl].filter(Boolean).length
-      ? { sameAs: [p.githubUrl, p.liveUrl, p.playStoreUrl].filter(Boolean) }
+    ...([p.liveUrl, p.playStoreUrl].filter(Boolean).length
+      ? { sameAs: [p.liveUrl, p.playStoreUrl].filter(Boolean) }
       : {}),
   };
 
@@ -306,7 +305,7 @@ export function firstParagraph(post: Pick<BlogPost, "blocks">) {
 
 export const postSeoTitle = (post: BlogPost) => {
   if (post.seoTitle?.trim()) return post.seoTitle.trim();
-  const withName = `${post.title} — Krish`;
+  const withName = `${post.title} — Krish Khati`;
   return withName.length <= 60 ? withName : clip(post.title, 60);
 };
 
@@ -351,8 +350,8 @@ export function postMeta(post: BlogPost, s: PublicSettings): PageMeta {
       image: [image],
       datePublished: post.date,
       dateModified: modified,
-      author: personRef(s),
-      publisher: personRef(s),
+      author: personRef(),
+      publisher: personRef(),
       mainEntityOfPage: { "@type": "WebPage", "@id": url },
       url,
       inLanguage: "en",
@@ -396,7 +395,7 @@ export function postMeta(post: BlogPost, s: PublicSettings): PageMeta {
 export function notFoundMeta(): PageMeta {
   return {
     ...defaults,
-    title: "Page not found — Krish",
+    title: "Page not found — Krish Khati",
     description: DEFAULT_DESCRIPTION,
     path: "/404",
     noindex: true,
@@ -433,6 +432,11 @@ export function headTags(meta: PageMeta): HeadTag[] {
   ];
   if (!meta.noindex)
     tags.push({ tag: "link", attrs: { rel: "canonical", href: canonical } });
+  tags.push(
+    { tag: "link", attrs: { rel: "me", href: GITHUB_PROFILE } },
+    { tag: "link", attrs: { rel: "me", href: LINKEDIN_PROFILE } },
+    { tag: "link", attrs: { rel: "me", href: INSTAGRAM_PROFILE } },
+  );
   tags.push(
     { tag: "meta", attrs: { property: "og:type", content: meta.type } },
     { tag: "meta", attrs: { property: "og:site_name", content: SITE_NAME } },

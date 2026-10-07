@@ -112,7 +112,7 @@ const starter: StarterRow[] = [
     description:
       'A modern, high-energy gym website for "Fitness Temple" featuring a hero section, programs/disciplines showcase, stats bar (ratings, members, years active), and a sleek black-and-red themed UI with smooth navigation.',
     meta_description: 'Gym website design for Fitness Temple: hero section, programs showcase, stats bar and a sleek black-and-red themed UI.',
-    github_url: 'https://github.com/KRRISH972/FITNESS_TEMPLE',
+    github_url: 'https://github.com/krish-khati/FITNESS_TEMPLE',
     live_url: 'https://fitness-temple-k0r76nt7c-kisshu1.vercel.app/',
     tech_stack: ['Web Design', 'Responsive Design', 'React', 'Gym Website', 'UI/UX'],
     gallery: [shot('/projects/fitness-temple.png', 'Fitness Temple gym website design hero section with Unleash Your Inner Power headline and Explore Programs CTA', 1440, 1000)],
@@ -122,7 +122,7 @@ const starter: StarterRow[] = [
     description:
       'An interactive memory-matching arcade game with a modern gradient UI, built with real-time audio components and an engaging "Launch Arcade" entry screen.',
     meta_description: 'Memory match game arcade with a modern gradient UI, real-time audio and an engaging "Launch Arcade" entry screen.',
-    github_url: 'https://github.com/KRRISH972/MEMORY-MATCH',
+    github_url: 'https://github.com/krish-khati/MEMORY-MATCH',
     live_url: 'https://memory-match-ashy.vercel.app/',
     tech_stack: ['Game Development', 'JavaScript', 'Browser Game', 'UI/UX'],
     gallery: [shot('/projects/memory-match.png', 'Memory Match - Browser Based Memory Arcade Game Launch Screen', 1440, 1000)],
@@ -130,8 +130,8 @@ const starter: StarterRow[] = [
   {
     name: 'LinguaBridge',
     description: 'An AI-powered language translation tool that bridges communication across languages using AI.',
-    meta_description: 'AI language translator that bridges communication across languages using AI, built by Krish.',
-    github_url: 'https://github.com/KRRISH972/LINGUABRIDGE-',
+    meta_description: 'AI language translator that bridges communication across languages using AI, built by Krish Khati.',
+    github_url: 'https://github.com/krish-khati/LINGUABRIDGE-',
     live_url: 'https://linguabridge.ai.studio',
     tech_stack: ['AI', 'NLP', 'Translation', 'Web App'],
     gallery: [shot('/projects/linguabridge.png', 'LinguaBridge - AI Translation App Showing Text Translation and Voice Interpreter Panels', 1440, 1000)],

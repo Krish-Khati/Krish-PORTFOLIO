@@ -1,2 +1,3 @@
-export const INSTAGRAM_PROFILE = "https://www.instagram.com/krrish_06_";
-export const LINKEDIN_PROFILE = "https://www.linkedin.com/in/krish-dhiman-09aa14434/";
+export const GITHUB_PROFILE = "https://github.com/krish-khati";
+export const INSTAGRAM_PROFILE = "https://www.instagram.com/krish_khati_/";
+export const LINKEDIN_PROFILE = "https://www.linkedin.com/in/krish-khati/";

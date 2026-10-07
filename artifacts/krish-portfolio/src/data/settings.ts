@@ -17,16 +17,16 @@ export type PublicSettings = {
 };
 
 export const defaultPublicSettings: PublicSettings = {
-  name: 'Krish',
+  name: 'Krish Khati',
   tagline: "I'm passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.",
   email: 'dhimankrish10@gmail.com',
   phone: '+91 93060 91154',
   location: 'Pundri, Kaithal, Haryana, India',
   roles: ['Web Developer', 'Digital Marketer', 'AI Enthusiast'],
-  instagram: 'https://instagram.com',
-  linkedin: 'https://www.linkedin.com',
+  instagram: 'https://www.instagram.com/krish_khati_/',
+  linkedin: 'https://www.linkedin.com/in/krish-khati/',
   youtube: 'https://youtube.com',
-  github: 'https://github.com/KRRISH972',
+  github: 'https://github.com/krish-khati',
   heroImage: '',
   aboutPhoto: '',
 };

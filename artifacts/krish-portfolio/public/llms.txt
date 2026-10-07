@@ -1,8 +1,14 @@
-# Krish | AI Developer
+# Krish Khati | AI Developer
 
-> Krish - AI Developer building AI-powered apps, chatbots and web projects: gym website design, memory match game, AI language translator and calculator app UI. Currently looking for an entry-level role or internship.
+> Krish Khati - AI Developer building AI-powered apps, chatbots and web projects: gym website design, memory match game, AI language translator and calculator app UI. Currently looking for an entry-level role or internship.
 
 The site is a single-page app with prerendered HTML for every public page. Content may be summarized and cited with a link back to the source page.
+
+## Profiles
+
+- [GitHub](https://github.com/krish-khati)
+- [LinkedIn](https://www.linkedin.com/in/krish-khati/)
+- [Instagram](https://www.instagram.com/krish_khati_/)
 
 ## Main pages
 

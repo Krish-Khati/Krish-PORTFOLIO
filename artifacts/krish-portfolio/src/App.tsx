@@ -39,6 +39,7 @@ import {
   useTools,
 } from "@/data/live";
 import { slugifyToolName, toolIconFor, type Tool } from "@/data/skills";
+import { GITHUB_PROFILE, INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "@/data/social";
 import { toast } from "@/hooks/use-toast";
 import { imageSrcSet, resizedImage } from "@/lib/image";
 import { homeMeta } from "@/seo/meta";
@@ -346,7 +347,7 @@ function Home() {
     <main className="site-shell">
       <SiteNav />
 
-      <section className="hero" id="top" aria-label="Krish introduction">
+      <section className="hero" id="top" aria-label="Krish Khati introduction">
         <HeroMedia image={settings.heroImage || undefined} />
         <div className="hero-overlay" aria-hidden="true" />
         <HeroParticles />
@@ -357,7 +358,7 @@ function Home() {
           </p>
           <h1 className="hero-name" data-testid="text-hero-title">
             <span className="name-letters">
-              {"Krish".split("").map((ch, i) => (
+              {"Krish\u00A0Khati".split("").map((ch, i) => (
                 <span
                   key={i}
                   className="name-letter"
@@ -475,7 +476,7 @@ function Home() {
                   src={resizedImage(settings.aboutPhoto, 700)}
                   srcSet={imageSrcSet(settings.aboutPhoto, [400, 700, 1000])}
                   sizes="(max-width: 900px) 80vw, 420px"
-                  alt="Krish, AI developer from Pundri, Haryana"
+                  alt="Krish Khati, AI developer from Pundri, Haryana"
                   loading="lazy"
                   decoding="async"
                 />
@@ -842,18 +843,18 @@ function Home() {
                 </div>
                 <div className="contact-socials">
                   <a
-                    href={settings.instagram}
+                    href={INSTAGRAM_PROFILE}
                     target="_blank"
-                    rel="noreferrer"
-                    aria-label="Instagram"
+                    rel="noopener noreferrer"
+                    aria-label="Krish Khati on Instagram"
                   >
                     <Instagram size={16} />
                   </a>
                   <a
-                    href={settings.linkedin}
+                    href={LINKEDIN_PROFILE}
                     target="_blank"
-                    rel="noreferrer"
-                    aria-label="LinkedIn"
+                    rel="noopener noreferrer"
+                    aria-label="Krish Khati on LinkedIn"
                   >
                     <Linkedin size={16} />
                   </a>
@@ -866,10 +867,10 @@ function Home() {
                     <Youtube size={16} />
                   </a>
                   <a
-                    href={settings.github}
+                    href={GITHUB_PROFILE}
                     target="_blank"
-                    rel="noreferrer"
-                    aria-label="GitHub"
+                    rel="noopener noreferrer"
+                    aria-label="Krish Khati on GitHub"
                   >
                     <Github size={16} />
                   </a>
@@ -887,14 +888,14 @@ function Home() {
                 <Phone size={14} /> {settings.phone}
               </a>
               <a
-                href={settings.github}
+                href={GITHUB_PROFILE}
                 target="_blank"
-                rel="noreferrer"
-                aria-label="GitHub"
+                rel="noopener noreferrer"
+                aria-label="Krish Khati on GitHub"
                 data-testid="link-github-contact"
               >
                 <Github size={14} />{" "}
-                {settings.github.replace(/^https?:\/\/(www\.)?/, "")}
+                {GITHUB_PROFILE.replace(/^https?:\/\/(www\.)?/, "")}
               </a>
             </div>
           </div>

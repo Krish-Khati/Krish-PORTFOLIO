@@ -2,7 +2,7 @@
 
 *AI Developer*
 
-Pundri, Kaithal, Haryana | dhimankrish10@gmail.com | +91 93060 91154 | [github.com/KRRISH972](https://github.com/KRRISH972)
+Pundri, Kaithal, Haryana | dhimankrish10@gmail.com | +91 93060 91154 | [github.com/krish-khati](https://github.com/krish-khati)
 
 ---
 
@@ -33,13 +33,13 @@ Class 10
 
 ## PROJECTS
 
-**Fitness Temple** | [github.com/KRRISH972/FITNESS_TEMPLE](https://github.com/KRRISH972/FITNESS_TEMPLE)
+**Fitness Temple** | [github.com/krish-khati/FITNESS_TEMPLE](https://github.com/krish-khati/FITNESS_TEMPLE)
 - A fitness-themed website showcasing workout/gym content, built to practice front-end structuring and styling.
 
-**LinguaBridge** | [github.com/KRRISH972/LINGUABRIDGE-](https://github.com/KRRISH972/LINGUABRIDGE-)
+**LinguaBridge** | [github.com/krish-khati/LINGUABRIDGE-](https://github.com/krish-khati/LINGUABRIDGE-)
 - A language-learning/translation-focused project exploring bridging communication across languages.
 
-**Memory Match Game** | [github.com/KRRISH972/MEMORY-MATCH](https://github.com/KRRISH972/MEMORY-MATCH)
+**Memory Match Game** | [github.com/krish-khati/MEMORY-MATCH](https://github.com/krish-khati/MEMORY-MATCH)
 - An interactive memory-matching game built to practice logic building and event-driven programming.
 
 **Calculator**

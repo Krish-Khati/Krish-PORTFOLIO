@@ -38,7 +38,7 @@ export function GooglePreview({ title, description, slug, date, section = 'blog'
       <div className="adm-serp-site">
         <span className="adm-serp-icon" aria-hidden="true">K</span>
         <span>
-          <strong>Krish</strong>
+          <strong>Krish Khati</strong>
           <small>{host} › {section} › {slug || (section === 'blog' ? 'your-post' : 'your-project')}</small>
         </span>
       </div>

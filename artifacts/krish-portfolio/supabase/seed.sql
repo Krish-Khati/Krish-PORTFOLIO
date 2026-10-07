@@ -11,12 +11,12 @@ on conflict (slug) do nothing;
 
 insert into projects (name, description, url, position)
 select * from (values
-  ('Fitness Temple', 'A fitness-themed website built to practice front-end structure, content hierarchy, and styling.', 'https://github.com/KRRISH972/FITNESS_TEMPLE', 0),
-  ('LinguaBridge', 'A language-learning and translation project exploring the small details that help communication travel.', 'https://github.com/KRRISH972/LINGUABRIDGE-', 1),
-  ('Memory Match Game', 'An interactive memory game built around logic, state changes, and event-driven programming.', 'https://github.com/KRRISH972/MEMORY-MATCH', 2),
+  ('Fitness Temple', 'A fitness-themed website built to practice front-end structure, content hierarchy, and styling.', 'https://github.com/krish-khati/FITNESS_TEMPLE', 0),
+  ('LinguaBridge', 'A language-learning and translation project exploring the small details that help communication travel.', 'https://github.com/krish-khati/LINGUABRIDGE-', 1),
+  ('Memory Match Game', 'An interactive memory game built around logic, state changes, and event-driven programming.', 'https://github.com/krish-khati/MEMORY-MATCH', 2),
   ('Calculator', 'A functional calculator application focused on core programming logic and arithmetic operations.', '', 3)
 ) as v(name, description, url, position)
 where not exists (select 1 from projects);
 
-insert into site_settings (id, data) values (1, '{"name":"Krish","tagline":"I''m passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.","email":"dhimankrish10@gmail.com","phone":"+91 93060 91154","location":"Pundri, Kaithal, Haryana, India","roles":["Web Developer","Digital Marketer","AI Enthusiast"],"instagram":"https://instagram.com","linkedin":"https://www.linkedin.com","youtube":"https://youtube.com","github":"https://github.com/KRRISH972"}'::jsonb)
+insert into site_settings (id, data) values (1, '{"name":"Krish","tagline":"I''m passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.","email":"dhimankrish10@gmail.com","phone":"+91 93060 91154","location":"Pundri, Kaithal, Haryana, India","roles":["Web Developer","Digital Marketer","AI Enthusiast"],"instagram":"https://instagram.com","linkedin":"https://www.linkedin.com","youtube":"https://youtube.com","github":"https://github.com/krish-khati"}'::jsonb)
 on conflict (id) do nothing;

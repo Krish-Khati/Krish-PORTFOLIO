@@ -98,7 +98,7 @@ export function HeroTicker() {
     <div
       className={`ticker${isPlaceholderData ? " is-loading" : ""}`}
       role="region"
-      aria-label="Krish focus areas"
+      aria-label="Krish Khati focus areas"
     >
       <ul className="visually-hidden">
         {data.items.map((item) => (

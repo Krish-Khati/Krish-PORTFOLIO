@@ -8,6 +8,7 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
+import { GITHUB_PROFILE } from '@/data/social';
 import { imageSrcSet, resizedImage } from '@/lib/image';
 import { blogListMeta } from '@/seo/meta';
 import { useSeo } from '@/seo/use-seo';
@@ -358,7 +359,7 @@ export default function BlogPage() {
               <a className="btn-primary bx-btn-glow" href="/#contact" data-testid="link-cta-contact">
                 <Send size={16} /> Get in touch
               </a>
-              <a className="btn-secondary bx-btn-outline" href={settings.github} target="_blank" rel="noreferrer">
+              <a className="btn-secondary bx-btn-outline" href={GITHUB_PROFILE} target="_blank" rel="noopener noreferrer">
                 <Code2 size={16} /> See my code
               </a>
             </div>

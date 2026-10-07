@@ -22,7 +22,7 @@ const emptyDraft = (order: number): Draft => ({
 
 const URL_FIELDS = [
   ['liveUrl', 'Live demo', 'https://…'],
-  ['githubUrl', 'GitHub', 'https://github.com/KRRISH972/…'],
+  ['githubUrl', 'GitHub', 'https://github.com/krish-khati/…'],
   ['playStoreUrl', 'Play Store', 'https://play.google.com/store/apps/details?id=…'],
   ['videoUrl', 'Video (YouTube or .mp4)', 'https://youtu.be/…'],
 ] as const;
