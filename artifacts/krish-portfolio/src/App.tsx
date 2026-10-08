@@ -388,7 +388,7 @@ function Home() {
             <a href="#work" className="btn-primary">
               View My Work <ArrowRight size={15} />
             </a>
-            <a href="/media/krish-resume.md" download className="btn-secondary">
+            <a href="/media/krish-resume.pdf" download className="btn-secondary">
               Download Resume <Download size={14} />
             </a>
           </div>
