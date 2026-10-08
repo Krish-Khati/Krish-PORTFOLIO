@@ -85,7 +85,7 @@ function seed(): Db {
     settings: {
       name: 'Krish Khati',
       tagline: "I'm passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.",
-      email: 'dhimankrish10@gmail.com',
+      email: 'krrishai0916@gmail.com',
       phone: '+91 93060 91154',
       location: 'Pundri, Kaithal, Haryana, India',
       roles: ['Web Developer', 'Digital Marketer', 'AI Enthusiast'],

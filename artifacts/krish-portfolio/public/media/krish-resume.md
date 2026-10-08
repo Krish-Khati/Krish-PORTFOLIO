@@ -1,14 +1,14 @@
-# KRISH
+# Krish Khati
 
 *AI Developer*
 
-Pundri, Kaithal, Haryana | dhimankrish10@gmail.com | +91 93060 91154 | [github.com/krish-khati](https://github.com/krish-khati)
+Pundri, Kaithal, Haryana | krrishai0916@gmail.com | +91 93060 91154 | [github.com/krish-khati](https://github.com/krish-khati) | [linkedin.com/in/krish-khati](https://www.linkedin.com/in/krish-khati/) | [krish-portfolio-dev.vercel.app](https://krish-portfolio-dev.vercel.app/)
 
 ---
 
 ## CAREER OBJECTIVE
 
-Motivated Class 12 student with a strong foundation in programming (Python, C, C++) and hands-on project experience building functional web and desktop applications. Seeking an entry-level opportunity or internship to apply problem-solving skills and grow as a software developer.
+Aspiring software developer and digital marketer who builds AI-powered apps and web projects using Python, C and AI tools. Also skilled in SEO, SEM and digital marketing, including setting up a personal portfolio with sitemap, structured data and Google Search Console. Looking for an internship or entry-level role in software development, AI or digital marketing.
 
 ---
 
@@ -24,10 +24,11 @@ Class 10
 
 ## TECHNICAL SKILLS
 
-- **Programming Languages:** Python, C, C++
+- **Programming Languages:** Python, C
 - **Web Technologies:** CSS
 - **Version Control:** Git, GitHub
 - **Spoken Languages:** English, Hindi
+- **Digital Marketing:** SEO, SEM
 
 ---
 
@@ -44,9 +45,6 @@ Class 10
 
 **Calculator**
 - A functional calculator application built using core programming logic for arithmetic operations.
-
-**M2F Gym Website**
-- A gym/fitness business website designed with a clean layout to present services and information.
 
 ---
 
