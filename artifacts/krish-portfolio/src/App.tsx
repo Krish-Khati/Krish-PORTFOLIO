@@ -28,6 +28,7 @@ import { SiteNav } from "@/components/site-nav";
 import { ProjectShowcase } from "@/components/project-showcase";
 import { homeProjects } from "@/data/projects";
 import { SiteFooter } from "@/components/site-footer";
+import { FAQSection } from "@/components/faq-section";
 import { HeroMedia } from "@/components/hero-media";
 import { HeroParticles } from "@/components/hero-particles";
 import { HeroBokeh } from "@/components/hero-bokeh";
@@ -775,10 +776,12 @@ function Home() {
         </div>
       </section>
 
+      <FAQSection />
+
       <section className="section contact-section" id="contact">
         <div className="section-inner contact-grid">
           <div>
-            <div className="section-label reveal">07 / Say hello</div>
+            <div className="section-label reveal">08 / Say hello</div>
             <h2 className="contact-title reveal reveal-delay-1">
               Let's build
               <br />
