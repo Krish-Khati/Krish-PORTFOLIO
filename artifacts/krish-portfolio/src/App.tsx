@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type FormEvent,
+  Fragment,
   lazy,
   type ReactNode,
   Suspense,
@@ -358,21 +359,34 @@ function Home() {
           </p>
           <h1 className="hero-name" data-testid="text-hero-title">
             <span className="name-letters">
-              {"Krish\u00A0Khati".split("").map((ch, i) => (
-                <span
-                  key={i}
-                  className="name-letter"
-                  data-letter={ch}
-                  style={
-                    {
-                      animationDelay: `${0.04 + i * 0.05}s`,
-                      "--i": i,
-                    } as CSSProperties
-                  }
-                >
-                  {ch}
-                </span>
-              ))}
+              {"Krish Khati".split(" ").map((word, w, words) => {
+                const offset = words.slice(0, w).reduce((n, prev) => n + prev.length, 0);
+                return (
+                  <Fragment key={word}>
+                    {w > 0 ? " " : null}
+                    <span className="name-word">
+                      {word.split("").map((ch, i) => {
+                        const index = offset + i;
+                        return (
+                          <span
+                            key={i}
+                            className="name-letter"
+                            data-letter={ch}
+                            style={
+                              {
+                                animationDelay: `${0.04 + index * 0.05}s`,
+                                "--i": index,
+                              } as CSSProperties
+                            }
+                          >
+                            {ch}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </Fragment>
+                );
+              })}
             </span>
             <span className="name-dots" aria-hidden="true">
               <span className="name-dot">.</span>

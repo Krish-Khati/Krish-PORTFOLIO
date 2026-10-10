@@ -146,6 +146,8 @@ button { font: inherit; }
   margin: 0; color: #ffffff; font-family: 'Poppins', sans-serif;
   font-size: clamp(64px, 10vw, 132px); font-weight: 800; line-height: 1; letter-spacing: -.01em;
   text-shadow: 0 20px 60px rgba(0,0,0,.5);
+  /* Never break inside a word (e.g. "Khati"); let the name wrap only between words. */
+  word-break: keep-all; overflow-wrap: normal;
 }
 .hero-role { margin: 22px 0 0; color: #eeeeee; font-family: 'Inter', sans-serif; font-size: clamp(16px, 2vw, 20px); font-weight: 500; letter-spacing: .01em; }
 .hero-desc { margin: 16px 0 0; max-width: 560px; color: #cccccc; font-family: 'Inter', sans-serif; font-size: clamp(16px, 1.9vw, 18px); font-weight: 400; line-height: 1.6; text-shadow: 0 4px 24px rgba(0,0,0,.55); }
@@ -169,7 +171,8 @@ button { font: inherit; }
 .hero-anim-4 { animation-name: heroRise15; animation-duration: .5s; animation-delay: .15s; }
 .hero-anim-5 { animation-name: heroPop; animation-duration: .5s; animation-delay: .2s; }
 
-.name-letters { display: inline-block; }
+.name-letters { display: inline-block; word-break: keep-all; }
+.name-word { white-space: nowrap; }
 .name-letter { display: inline-block; opacity: 1; animation-name: heroRise30; animation-duration: .6s; animation-timing-function: cubic-bezier(.22,.68,.32,1); animation-fill-mode: both; }
 .name-dots { display: inline-block; margin-left: 5px; }
 .name-dot { display: inline-block; color: #2ecc71; opacity: .5; animation-name: dotBounce; animation-duration: 1.2s; animation-timing-function: ease-in-out; animation-fill-mode: both; animation-iteration-count: infinite; }
