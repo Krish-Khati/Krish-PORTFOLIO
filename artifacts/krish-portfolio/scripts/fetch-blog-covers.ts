@@ -2,19 +2,29 @@
 /*
  * Fetches a cover photo for every published blog post that doesn't have one yet.
  *
- * Source: Openverse (https://api.openverse.org) — keyless, and the same CC0/StockSnap
- * collection the existing covers came from. For each post it searches using the post's
- * cover_alt (falling back to its title), downloads the image as <slug>.jpg and re-encodes
- * it to <slug>.webp (what the on-page <img> uses; the .jpg is for social previews).
+ * Source priority (configurable via env vars):
+ *   1. Pexels        — https://api.pexels.com (needs PEXELS_API_KEY)
+ *   2. Unsplash      — https://api.unsplash.com (needs UNSPLASH_ACCESS_KEY)
+ *   3. Openverse     — https://api.openverse.org (keyless, CC0/StockSnap)
  *
- * Posts are read from Supabase when VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY are set in
- * .env, so brand-new published posts are picked up automatically; otherwise it falls back to
- * the static list in src/data/blog.ts. Posts that already have a cover (in the DB or as local
- * files) are skipped. Newly added covers are registered in the bundledCovers set in
- * src/data/blog.ts and credited in public/blog-covers/CREDITS.txt.
+ * For each post it searches using topic/category keywords, downloads the image as
+ * <slug>.jpg and re-encodes to <slug>.webp (on-page <img> uses .webp; .jpg for social).
  *
- * Usage: pnpm fetch-covers        (add --force to re-fetch posts that already have covers)
+ * Posts are read from Supabase when VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY are set
+ * in .env (so brand-new published posts are picked up automatically); otherwise it falls
+ * back to the static list in src/data/blog.ts. Posts that already have a cover (local
+ * files or DB cover column) are skipped. Newly added covers are registered in the
+ * bundledCovers set in src/data/blog.ts and credited in public/blog-covers/CREDITS.txt.
+ *
+ * Optional: with SUPABASE_SERVICE_ROLE_KEY set, also PATCHes the DB row for each post
+ * to set `cover = /blog-covers/<slug>.webp` and a descriptive `cover_alt`.
+ *
+ * Usage:
+ *   pnpm fetch-covers              # fetch missing covers
+ *   pnpm fetch-covers --force      # re-fetch even if local files/DB cover exist
+ *   pnpm fetch-covers --sync-db    # also write cover/cover_alt to DB (needs service role key)
  */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +37,7 @@ const blogDataSource = path.join(root, 'src', 'data', 'blog.ts');
 const creditsFile = path.join(coversDir, 'CREDITS.txt');
 
 const force = process.argv.includes('--force');
+const syncDb = process.argv.includes('--sync-db');
 
 function loadEnv() {
   const envPath = path.join(root, '.env');
@@ -79,14 +90,123 @@ function updateBundledSlugs(slugs: string[]) {
   fs.writeFileSync(blogDataSource, next);
 }
 
+/** Unified result shape from any provider. */
+type CoverMatch = {
+  downloadUrl: string;   // direct image URL to download
+  alt: string;           // alt/description from provider
+  title: string;         // photo title/description for credit line
+  creator: string;       // photographer name
+  pageUrl: string;       // URL to photo page for attribution
+  source: 'pexels' | 'unsplash' | 'openverse';
+};
+
+// ============================ PEXELS ============================
+async function pexelsSearch(query: string): Promise<CoverMatch | null> {
+  const key = process.env.PEXELS_API_KEY;
+  if (!key) return null;
+  const url = new URL('https://api.pexels.com/v1/search');
+  url.searchParams.set('query', query);
+  url.searchParams.set('per_page', '15');
+  url.searchParams.set('orientation', 'landscape');
+  try {
+    const res = await fetch(url, { headers: { Authorization: key, Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { photos?: PexelsPhoto[] };
+    const photo = data.photos?.find((p) => p.src?.large2x && (p.width ?? 0) >= (p.height ?? 0));
+    if (!photo) return null;
+    return {
+      downloadUrl: photo.src.large2x,
+      alt: photo.alt?.trim() || '',
+      title: photo.alt?.trim() || query,
+      creator: photo.photographer ?? 'Unknown',
+      pageUrl: photo.url ?? '',
+      source: 'pexels',
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface PexelsPhoto {
+  id: number; width: number; height: number; url: string; photographer: string;
+  src: { original: string; large2x: string; large: string; medium: string; small: string;
+         portrait: string; landscape: string; tiny: string };
+  alt: string;
+}
+
+// ============================ UNSPLASH ============================
+async function unsplashSearch(query: string): Promise<CoverMatch | null> {
+  const key = process.env.UNSPLASH_ACCESS_KEY;
+  if (!key) return null;
+  const url = new URL('https://api.unsplash.com/search/photos');
+  url.searchParams.set('query', query);
+  url.searchParams.set('per_page', '15');
+  url.searchParams.set('orientation', 'landscape');
+  url.searchParams.set('content_filter', 'low');
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Client-ID ${key}`, 'Accept-Version': 'v1', Accept: 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: UnsplashPhoto[] };
+    const photo = data.results?.find((p) => p.urls?.regular && (p.width ?? 0) >= (p.height ?? 0));
+    if (!photo) return null;
+    return {
+      downloadUrl: photo.urls.regular,
+      alt: (photo.alt_description ?? photo.description ?? '').trim(),
+      title: (photo.description ?? photo.alt_description ?? query).trim(),
+      creator: photo.user?.name ?? 'Unknown',
+      pageUrl: photo.links?.html ?? '',
+      source: 'unsplash',
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface UnsplashPhoto {
+  id: string; width: number; height: number; description: string | null; alt_description: string | null;
+  urls: { raw: string; full: string; regular: string; small: string; thumb: string };
+  user: { name: string; username: string; links: { html: string } };
+  links: { self: string; html: string; download: string; download_location: string };
+}
+
+// ============================ OPENVERSE (keyless fallback) ============================
 type OpenverseResult = {
   title?: string; creator?: string; foreign_landing_url?: string;
   thumbnail?: string; width?: number; height?: number; filetype?: string;
 };
 
-// Openverse's StockSnap catalog only matches short, generic queries, so instead of sending the
-// literal cover_alt ("Screenshot of the ... app") we map the post's topic to a search phrase that
-// actually returns a fitting photo, then relax to the title, category and finally generic terms.
+async function openverseSearch(query: string): Promise<CoverMatch | null> {
+  const url = new URL('https://api.openverse.org/v1/images/');
+  url.searchParams.set('q', query);
+  url.searchParams.set('license', 'cc0');
+  url.searchParams.set('source', 'stocksnap');
+  url.searchParams.set('page_size', '12');
+  url.searchParams.set('mature', 'false');
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: OpenverseResult[] };
+    const r = (data.results ?? []).find(
+      (x) => x.thumbnail && (x.filetype ?? 'jpg') === 'jpg' && (x.width ?? 0) >= (x.height ?? 0),
+    );
+    if (!r || !r.thumbnail) return null;
+    return {
+      downloadUrl: `${r.thumbnail.replace(/\/$/, '')}/?full_size=true&compressed=false`,
+      alt: '',
+      title: r.title ?? query,
+      creator: r.creator ?? 'Unknown',
+      pageUrl: r.foreign_landing_url ?? '',
+      source: 'openverse',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================ SEARCH PIPELINE ============================
+
 const TOPIC_QUERIES: { re: RegExp; q: string[] }[] = [
   { re: /game|play store|android|memory match/i, q: ['mobile phone'] },
   { re: /voice|assistant|jarvis|speech|microphone|audio/i, q: ['microphone equipment'] },
@@ -136,24 +256,69 @@ function queryCandidates(post: SourcePost, category: string): string[] {
   ].filter((q, i, arr) => q && arr.indexOf(q) === i);
 }
 
-async function openverseSearch(query: string): Promise<OpenverseResult | null> {
-  const url = new URL('https://api.openverse.org/v1/images/');
-  url.searchParams.set('q', query);
-  url.searchParams.set('license', 'cc0');
-  url.searchParams.set('source', 'stocksnap');
-  url.searchParams.set('page_size', '12');
-  url.searchParams.set('mature', 'false');
+/** Try each configured provider in priority order for each query candidate. */
+async function findCover(post: SourcePost, category: string, usedUrls: Set<string>): Promise<CoverMatch | null> {
+  const candidates = queryCandidates(post, category);
+  // Build provider list in priority order based on available keys
+  const providers: ((q: string) => Promise<CoverMatch | null>)[] = [];
+  if (process.env.PEXELS_API_KEY) providers.push(pexelsSearch);
+  if (process.env.UNSPLASH_ACCESS_KEY) providers.push(unsplashSearch);
+  providers.push(openverseSearch); // always available as final fallback
+
+  for (const query of candidates) {
+    for (const provider of providers) {
+      const match = await provider(query);
+      if (match && !usedUrls.has(match.pageUrl)) {
+        return { ...match, downloadUrl: match.downloadUrl }; // matchedQuery stored separately
+      }
+    }
+  }
+  return null;
+}
+
+// ============================ ALT TEXT ============================
+
+/** Build a descriptive, keyword-rich alt from the image's own alt + the post's title. */
+function buildAlt(post: SourcePost, imageAlt: string, matchedQuery: string): string {
+  const base = imageAlt && imageAlt.trim() ? imageAlt.trim() : `photo matching "${matchedQuery}"`;
+  // Keep it concise but SEO-rich: describe the image then tie to the post topic
+  const alt = `${base}, illustrating the post "${post.title}"`;
+  return alt.slice(0, 250); // reasonable alt length
+}
+
+// ============================ DB SYNC (optional) ============================
+
+async function syncCoverToDb(post: SourcePost, webpPath: string, alt: string): Promise<void> {
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.VITE_SUPABASE_URL;
+  if (!svcKey || !url) {
+    console.log(`  (DB sync skipped: SUPABASE_SERVICE_ROLE_KEY not set)`);
+    return;
+  }
+  const endpoint = `${url.replace(/\/$/, '')}/rest/v1/posts?slug=eq.${encodeURIComponent(post.slug)}`;
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { results?: OpenverseResult[] };
-    return (data.results ?? []).find(
-      (r) => r.thumbnail && (r.filetype ?? 'jpg') === 'jpg' && (r.width ?? 0) >= (r.height ?? 0),
-    ) ?? null;
-  } catch {
-    return null;
+    const res = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: {
+        apikey: svcKey,
+        Authorization: `Bearer ${svcKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ cover: webpPath, cover_alt: alt }),
+    });
+    if (res.ok) {
+      console.log(`  DB updated: cover + cover_alt for ${post.slug}`);
+    } else {
+      const txt = await res.text();
+      console.warn(`  DB sync failed for ${post.slug}: HTTP ${res.status} ${txt}`);
+    }
+  } catch (err) {
+    console.warn(`  DB sync error for ${post.slug}: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
+
+// ============================ UTIL ============================
 
 async function downloadImage(url: string, dest: string) {
   const res = await fetch(url, { headers: { 'User-Agent': 'krish-portfolio cover fetcher' } });
@@ -163,11 +328,12 @@ async function downloadImage(url: string, dest: string) {
 
 async function encodeCover(jpg: string, webp: string) {
   const sharp = (await import('sharp')).default;
-  // Re-encode the .jpg (used for social previews) at a sane size, then the .webp for the page.
   await sharp(jpg).resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 82, mozjpeg: true }).toFile(`${jpg}.tmp`);
   fs.renameSync(`${jpg}.tmp`, jpg);
   await sharp(jpg).webp({ quality: 82 }).toFile(webp);
 }
+
+// ============================ MAIN ============================
 
 async function main() {
   loadEnv();
@@ -179,12 +345,13 @@ async function main() {
 
   const registered = bundledSlugs();
   const addedCredits: string[] = [];
-  const usedImages = new Set<string>();
+  const usedUrls = new Set<string>();
 
   for (const post of posts) {
     const jpg = path.join(coversDir, `${post.slug}.jpg`);
     const webp = path.join(coversDir, `${post.slug}.webp`);
     const haveBoth = fs.existsSync(jpg) && fs.existsSync(webp);
+
     if (haveBoth && !force) {
       if (!registered.includes(post.slug)) registered.push(post.slug);
       console.log(`skip   ${post.slug} (already has cover)`);
@@ -195,31 +362,49 @@ async function main() {
       continue;
     }
 
-    let match: OpenverseResult | null = null;
+    let match: CoverMatch | null = null;
     let matchedQuery = '';
+
+    // Try to find a cover across all providers
     for (const query of queryCandidates(post, post.category)) {
-      const found = await openverseSearch(query);
-      if (found && !usedImages.has(found.foreign_landing_url ?? '')) {
-        match = found;
-        matchedQuery = query;
-        break;
+      for (const provider of [
+        process.env.PEXELS_API_KEY ? pexelsSearch : null,
+        process.env.UNSPLASH_ACCESS_KEY ? unsplashSearch : null,
+        openverseSearch,
+      ].filter(Boolean) as ((q: string) => Promise<CoverMatch | null>)[]) {
+        const found = await provider(query);
+        if (found && !usedUrls.has(found.pageUrl)) {
+          match = found;
+          matchedQuery = query;
+          break;
+        }
       }
+      if (match) break;
     }
-    if (!match?.thumbnail) {
-      console.warn(`miss   ${post.slug} (no Openverse result)`);
+
+    if (!match) {
+      console.warn(`miss   ${post.slug} (no result from any provider)`);
       continue;
     }
 
     try {
-      const full = `${match.thumbnail.replace(/\/$/, '')}/?full_size=true&compressed=false`;
-      await downloadImage(full, jpg);
+      await downloadImage(match.downloadUrl, jpg);
       await encodeCover(jpg, webp);
-      usedImages.add(match.foreign_landing_url ?? '');
-      addedCredits.push(
-        `${post.slug}.jpg — "${match.title ?? post.title}" by ${match.creator ?? 'Unknown'} — ${match.foreign_landing_url ?? ''}`,
-      );
+
+      const alt = buildAlt(post, match.alt, matchedQuery);
+      usedUrls.add(match.pageUrl);
+
+      const creditLine = `${post.slug}.jpg — "${match.title}" by ${match.creator} — ${match.pageUrl} (via ${match.source})`;
+      addedCredits.push(creditLine);
+
       if (!registered.includes(post.slug)) registered.push(post.slug);
-      console.log(`done   ${post.slug} <- "${match.title ?? ''}" by ${match.creator ?? 'Unknown'} (q="${matchedQuery}")`);
+      console.log(`done   ${post.slug} <- "${match.title}" by ${match.creator} [${match.source}] (q="${matchedQuery}")`);
+
+      // Optional DB sync
+      if (syncDb) {
+        const webpPath = `/blog-covers/${post.slug}.webp`;
+        await syncCoverToDb(post, webpPath, alt);
+      }
     } catch (err) {
       console.error(`error  ${post.slug}: ${err instanceof Error ? err.message : String(err)}`);
     }

@@ -9,7 +9,9 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +36,30 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Optional free backup writer, used only if Gemini fails after retries. The script
-          # works fine without this secret — it just has no backup until you add it.
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # Optional: Vercel Deploy Hook URL. When a post is published automatically, the script calls
-          # it so the prerendered pages, sitemap.xml and rss.xml are rebuilt (and IndexNow is pinged).
-          # Without it the post still saves; it just shows up in the sitemap on the next deploy.
           VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
-          # Optional: set these repo variables (Settings -> Secrets and variables -> Actions ->
-          # Variables) to a comma-separated list of model ids to try first, e.g.
-          # "gemini-flash-latest,gemini-2.5-flash". Leave unset for fully automatic model
-          # selection (ai-model-picker.ts asks each provider what's live and ranks it).
           GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
           GROQ_MODELS: ${{ vars.GROQ_MODELS }}
+
+      - name: Fetch cover images for new posts
+        run: pnpm --filter @workspace/krish-portfolio run fetch-covers --sync-db
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+
+      - name: Commit cover images & updated blog data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add artifacts/krish-portfolio/public/blog-covers/ artifacts/krish-portfolio/src/data/blog.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: add cover images for new blog post(s)"
+            git push origin main
+          else
+            echo "No new cover files to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
