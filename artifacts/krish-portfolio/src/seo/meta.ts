@@ -165,8 +165,18 @@ export function homeMeta(s: PublicSettings): PageMeta {
         inLanguage: "en",
         publisher: { "@id": PERSON_ID },
       },
-      faqPageJsonLd(),
     ],
+  };
+}
+
+export function faqPageMeta(s: PublicSettings): PageMeta {
+  return {
+    ...defaults,
+    title: "FAQ | Krish Khati",
+    description:
+      "Answers to common questions about my tech stack, projects (JARVIS, Yojana Saathi), availability for work, digital marketing services, and where to find my work.",
+    path: "/faq",
+    jsonLd: [faqPageJsonLd()],
   };
 }
 

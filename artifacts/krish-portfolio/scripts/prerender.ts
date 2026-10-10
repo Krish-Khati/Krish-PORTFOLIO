@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { loadEnv } from 'vite';
 import { blogPosts, type BlogBlock, type BlogPost, formatPostDate, postFromRow, readingMinutes, withCover } from '../src/data/blog';
+import { faqs } from '../src/data/faqs';
 import { imageAlt, type Project, projectFromRow, projectPath, projects as staticProjects } from '../src/data/projects';
 import { defaultPublicSettings, type PublicSettings } from '../src/data/settings';
 import { GITHUB_PROFILE } from '../src/data/social';
@@ -10,7 +11,7 @@ import { defaultTicker, type Ticker, tickerFromRows } from '../src/data/ticker';
 import { textToBlocks } from '../src/lib/text-blocks';
 import { escapeHtml, inlineToHtml } from '../src/seo/inline';
 import {
-  blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectMeta, projectsMeta,
+  blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectMeta, projectsMeta, faqPageMeta,
 } from '../src/seo/meta';
 import { postsMentioningProject, relatedPosts } from '../src/seo/related';
 import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_NAME, SITE_URL } from '../src/seo/site';
@@ -139,13 +140,24 @@ function homeBody({ posts, projects, settings, ticker }: SiteData) {
 
 function blogBody({ posts }: SiteData) {
   return `<main class="seo-static">${nav}
-<h1>Thoughts on building &amp; learning.</h1>
+<h1>Thoughts on building & learning.</h1>
 <p>What I'm learning, what I'm building, and the mistakes that taught me the most.</p>
 ${posts.map((p) => `<article>
 <h2><a href="${postPath(p.slug)}">${e(p.title)}</a></h2>
 <p><time datetime="${p.date}">${formatPostDate(p.date)}</time> · ${e(p.category)} · ${readingMinutes(p)} min read</p>
 <p>${e(p.excerpt)}</p>
 </article>`).join('\n')}
+</main>`;
+}
+
+function faqBody({ settings }: SiteData) {
+  return `<main class="seo-static">${nav}
+<h1>Frequently Asked Questions</h1>
+<p>Quick answers to the questions I get most often about my work, tools, availability, and how I build things.</p>
+<section>
+<h2>Frequently Asked Questions</h2>
+${faqs.map((f) => `<h3>${e(f.question)}</h3><p>${inlineToHtml(f.answer)}</p>`).join('\n')}
+</section>
 </main>`;
 }
 
@@ -242,6 +254,7 @@ function sitemapEntries({ posts, projects }: SiteData): SitemapEntry[] {
     { loc: absoluteUrl('/'), lastmod: [latest, latestProject].filter(Boolean).sort().at(-1) },
     { loc: absoluteUrl('/blog'), lastmod: latest },
     { loc: absoluteUrl('/projects'), lastmod: latestProject },
+    { loc: absoluteUrl('/faq'), lastmod: latest },
     ...projects.map((p) => ({ loc: absoluteUrl(projectPath(p.slug)), lastmod: day(p.updatedAt) })),
     ...posts.map((p) => ({ loc: absoluteUrl(postPath(p.slug)), lastmod: postLastmod(p) })),
   ];
@@ -375,6 +388,7 @@ async function main() {
   writeFile('index.html', render(homeMeta(data.settings), homeBody(data), true));
   writeFile('blog/index.html', render(blogListMeta(data.posts, data.settings), blogBody(data)));
   writeFile('projects/index.html', render(projectsMeta(data.projects, data.settings), projectsBody(data)));
+  writeFile('faq/index.html', render(faqPageMeta(data.settings), faqBody(data)));
   for (const project of data.projects) {
     writeFile(`projects/${project.slug}/index.html`, render(projectMeta(project, data.settings), projectBody(project, data)));
   }

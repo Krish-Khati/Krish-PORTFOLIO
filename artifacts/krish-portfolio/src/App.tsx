@@ -61,6 +61,7 @@ const BlogPostPage = lazy(() => import("@/pages/blog-post"));
 const ProjectsPage = lazy(() => import("@/pages/projects"));
 const ProjectPage = lazy(() => import("@/pages/project"));
 const NotFound = lazy(() => import("@/pages/not-found"));
+const FAQPage = lazy(() => import("@/pages/faq"));
 // Toasts only appear after the contact form is used, so the Radix toast code loads off the critical path.
 const Toaster = lazy(() =>
   import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })),
@@ -936,6 +937,7 @@ function Router() {
           <Route path="/blog/:slug" component={BlogPostPage} />
           <Route path="/projects" component={ProjectsPage} />
           <Route path="/projects/:slug" component={ProjectPage} />
+          <Route path="/faq" component={FAQPage} />
           <Route path="/admin" nest component={AdminApp} />
           <Route component={NotFound} />
         </Switch>

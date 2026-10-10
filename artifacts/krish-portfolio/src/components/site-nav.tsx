@@ -64,6 +64,9 @@ export function SiteNav({ onBlog = false }: { onBlog?: boolean }) {
         <li>
           <Link href="/blog" className={onBlog ? 'active' : undefined} data-testid="link-blog" onClick={() => setOpen(false)}>Blog</Link>
         </li>
+        <li>
+          <Link href="/faq" className={location === '/faq' ? 'active' : undefined} data-testid="link-faq" onClick={() => setOpen(false)}>FAQ</Link>
+        </li>
       </ul>
       <div className="socials">
         <a href={INSTAGRAM_PROFILE} target="_blank" rel="noopener noreferrer" aria-label="Krish Khati on Instagram"><Instagram size={16} /></a>
