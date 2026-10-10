@@ -16,27 +16,8 @@ export function FAQSection() {
     }
   };
 
-  const generateFAQSchema = () => {
-    return {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: faq.answer,
-        },
-      })),
-    };
-  };
-
   return (
     <section className="section faq-section" id="faq" aria-labelledby="faq-heading">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(generateFAQSchema()) }}
-      />
       <div className="section-inner">
         <div className="section-label reveal">07 / Questions</div>
         <h2 id="faq-heading" className="section-title reveal reveal-delay-1">

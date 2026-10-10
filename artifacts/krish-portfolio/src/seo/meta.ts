@@ -3,6 +3,7 @@ import { type Project, projectCover, projectPath } from "../data/projects";
 import { INSTAGRAM_PROFILE, GITHUB_PROFILE, LINKEDIN_PROFILE } from "../data/social";
 import type { PublicSettings } from "../data/settings";
 import { escapeHtml, stripInline } from "./inline";
+import { faqs } from "@/data/faqs";
 import {
   absoluteUrl,
   DEFAULT_DESCRIPTION,
@@ -132,6 +133,21 @@ const defaults = {
   type: "website" as const,
 };
 
+function faqPageJsonLd(): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+}
+
 export function homeMeta(s: PublicSettings): PageMeta {
   return {
     ...defaults,
@@ -149,6 +165,7 @@ export function homeMeta(s: PublicSettings): PageMeta {
         inLanguage: "en",
         publisher: { "@id": PERSON_ID },
       },
+      faqPageJsonLd(),
     ],
   };
 }
