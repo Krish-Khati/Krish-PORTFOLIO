@@ -65,6 +65,8 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
               src={resizedImage(post.cover, 1000)}
               srcSet={imageSrcSet(post.cover, [640, 1000, 1400])}
               sizes="(max-width: 900px) 92vw, 860px"
+              width="1200"
+              height="675"
               alt={post.coverAlt || post.title}
               fetchPriority="high"
               decoding="async"
@@ -116,7 +118,7 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
                 {related.map((r) => (
                   <Link key={r.slug} href={`/blog/${r.slug}`} className="post-related-card" data-testid={`link-related-${r.slug}`}>
                     {r.cover ? (
-                      <img src={resizedImage(r.cover, 400)} alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
+                      <img src={resizedImage(r.cover, 400)} width="400" height="225" alt={r.coverAlt || r.title} loading="lazy" decoding="async" />
                     ) : (
                       <span className="post-related-fallback" aria-hidden="true" />
                     )}

@@ -244,6 +244,11 @@ const bundledCovers = new Set([
   "what-a-memory-match-game-taught-me-about-state",
   "how-i-use-ai-tools-without-outsourcing-my-thinking",
   "what-digital-marketing-with-ai-taught-me",
+  "publish-free-android-game",
+  "how-to-create-portfolio-website",
+  "automate-blog-posts-free-ai",
+  "free-government-scheme-finder",
+  "build-python-voice-assistant",
 ]);
 
 export function withCover<T extends BlogPost>(post: T): T {

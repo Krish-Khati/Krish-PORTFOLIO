@@ -34,7 +34,7 @@ function PostCover({ post, className }: { post: BlogPost; className: string }) {
   return (
     <div className={className}>
       {cover ? (
-        <img src={resizedImage(cover, 640)} srcSet={imageSrcSet(cover, [400, 640, 960])} sizes="(max-width: 720px) 92vw, 480px" alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
+        <img src={resizedImage(cover, 640)} srcSet={imageSrcSet(cover, [400, 640, 960])} sizes="(max-width: 720px) 92vw, 480px" width="1200" height="675" alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
       ) : (
         <div className="bx-cover-fallback" aria-hidden="true">
           <Icon size={46} strokeWidth={1.4} />
