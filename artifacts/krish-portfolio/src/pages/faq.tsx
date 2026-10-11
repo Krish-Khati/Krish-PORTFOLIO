@@ -18,6 +18,61 @@ export default function FAQPage() {
     window.scrollTo(0, 0);
   }, []);
 
+  // Global reveal observer for all .reveal elements on this page (hero, FAQ items, etc.)
+  // Includes MutationObserver to catch dynamically added .reveal elements (e.g., from lazy-loaded FAQSection)
+  useEffect(() => {
+    const observeReveals = () => {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(".reveal:not(.is-visible)"));
+      nodes.forEach((node) => revealObserver.observe(node));
+    };
+
+    const revealObserver = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            revealObserver.unobserve(entry.target);
+          }
+        }),
+      { threshold: 0.14, rootMargin: "0px 0px -35px" }
+    );
+
+    // Initial observation
+    observeReveals();
+
+    // MutationObserver to catch dynamically added .reveal elements (e.g., from lazy-loaded components)
+    const mutationObserver = new MutationObserver((mutations) => {
+      let shouldReobserve = false;
+      for (const mutation of mutations) {
+        if (mutation.type === "childList") {
+          for (const node of mutation.addedNodes) {
+            if (node instanceof HTMLElement) {
+              if (node.matches(".reveal:not(.is-visible)") || node.querySelector(".reveal:not(.is-visible)")) {
+                shouldReobserve = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (shouldReobserve) {
+        observeReveals();
+      }
+    });
+
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Also observe on scroll to catch any missed elements
+    const onScroll = () => observeReveals();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      revealObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   return (
     <main className="site-shell faq-page">
       <SiteNav onBlog={false} />
