@@ -1,9 +1,10 @@
 import { ChevronDown, HelpCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { faqs, type FAQ } from "@/data/faqs";
 
 export function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
 
   const toggleFAQ = (index: number) => {
     setOpenIndex((prev) => (prev === index ? null : index));
@@ -15,6 +16,23 @@ export function FAQSection() {
       toggleFAQ(index);
     }
   };
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const observer = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        }),
+      { threshold: 0.15, rootMargin: "0px 0px -35px" }
+    );
+    section.querySelectorAll(".reveal:not(.is-visible)").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <section className="section faq-section" id="faq" aria-labelledby="faq-heading">
