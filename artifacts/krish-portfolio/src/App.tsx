@@ -777,12 +777,23 @@ function Home() {
         </div>
       </section>
 
-      <FAQSection />
+      <section className="section faq-cta-section" aria-labelledby="faq-cta-heading">
+        <div className="section-inner">
+          <div className="faq-cta-card reveal">
+            <h3 id="faq-cta-heading" className="faq-cta-heading">
+              Have questions?
+            </h3>
+            <p className="faq-cta-text">
+              Check out our <Link href="/faq" className="faq-cta-link">Frequently Asked Questions</Link> for quick answers about my work, tools, availability, and how I build things.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="section contact-section" id="contact">
         <div className="section-inner contact-grid">
           <div>
-            <div className="section-label reveal">08 / Say hello</div>
+            <div className="section-label reveal">07 / Say hello</div>
             <h2 className="contact-title reveal reveal-delay-1">
               Let's build
               <br />
