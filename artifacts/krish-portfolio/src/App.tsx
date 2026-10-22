@@ -45,6 +45,7 @@ import { GITHUB_PROFILE, INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "@/data/soci
 import { toast } from "@/hooks/use-toast";
 import { imageSrcSet, resizedImage } from "@/lib/image";
 import { homeMeta } from "@/seo/meta";
+import { IDENTITY_SUMMARY } from "@/seo/site";
 import { useSeo } from "@/seo/use-seo";
 import {
   Link,
@@ -443,6 +444,14 @@ function Home() {
               Motivated Class 12 student. Strong foundations in Python, C, and
               C++, with hands-on practice building functional web and desktop
               applications.
+            </p>
+            {/* Fact-dense identity block: the one paragraph that names him, his alias, his
+                location and his stack — so AI search engines can tell him apart from others. */}
+            <p
+              className="about-summary about-in about-rise"
+              style={{ transitionDelay: ".6s" }}
+            >
+              {IDENTITY_SUMMARY}
             </p>
           </div>
           <div className="about-photo-wrap">

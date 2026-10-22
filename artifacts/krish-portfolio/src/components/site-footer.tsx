@@ -50,7 +50,8 @@ export function SiteFooter() {
         <div className="footer-brand">
           <div className="footer-logo">Krish Khati</div>
           <p className="footer-tagline">
-            AI Developer & Digital Marketer building things that make an impact.
+            Software Developer &amp; AI/Digital Marketing Specialist based in
+            Pundri, Haryana.
           </p>
         </div>
 

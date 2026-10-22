@@ -267,6 +267,10 @@ button { font: inherit; }
   margin: 26px 0 0; max-width: 440px; color: #cccccc; font-family: 'Inter', sans-serif;
   font-size: 17px; line-height: 1.7;
 }
+.about-summary {
+  margin: 18px 0 0; max-width: 560px; color: #cccccc; font-family: 'Inter', sans-serif;
+  font-size: 17px; line-height: 1.7;
+}
 .about-text { position: relative; }
 .about-text > :not(.about-ghost) { position: relative; z-index: 1; }
 .about-ghost {
@@ -1685,6 +1689,7 @@ button { font: inherit; }
   .about-layout { grid-template-columns: 1fr; flex-direction: column; gap: 40px; justify-content: center; text-align: center; }
   .about-photo-wrap { order: -1; }
   .about-copy { margin-left: auto; margin-right: auto; }
+  .about-summary { margin-left: auto; margin-right: auto; }
   .about-heading { text-align: center; }
   .story-section { padding: 70px 20px; }
   .story-card { padding: 26px 20px; }

@@ -14,7 +14,7 @@ import {
   blogListMeta, headHtml, homeMeta, type PageMeta, postMeta, postMetaDescription, projectMeta, projectsMeta, faqPageMeta,
 } from '../src/seo/meta';
 import { postsMentioningProject, relatedPosts } from '../src/seo/related';
-import { absoluteUrl, INDEXNOW_KEY, postPath, SITE_NAME, SITE_URL } from '../src/seo/site';
+import { absoluteUrl, IDENTITY_SUMMARY, INDEXNOW_KEY, postPath, SITE_NAME, SITE_URL } from '../src/seo/site';
 
 /*
  * Runs right after `vite build` (see package.json). The site is a single-page app, so without this
@@ -119,11 +119,12 @@ const heroPoster = `<div class="seo-hero" aria-hidden="true"><picture>
 
 function homeBody({ posts, projects, settings, ticker }: SiteData) {
   return `${settings.heroImage ? '' : heroPoster}<main class="seo-static">${nav}
-<h1>${e(SITE_NAME)} — AI developer</h1>
+<h1>${e(SITE_NAME)} — Software Developer &amp; AI Specialist</h1>
 <p>${e(settings.tagline)}</p>
 <ul>${ticker.items.map((i) => `<li>${e(i.label)}</li>`).join('')}</ul>
 <h2>Small town. Big intent.</h2>
 <p>Motivated Class 12 student. Strong foundations in Python, C, and C++, with hands-on practice building functional web and desktop applications.</p>
+<p>${e(IDENTITY_SUMMARY)}</p>
 <h2>My story</h2>
 <p>I'm a Class 12 student from Pundri, Kaithal - no formal tech background, no coding classes. Just curiosity and a laptop.</p>
 <p>I started teaching myself Python, C, and C++, then moved into web development and exploring AI tools. Every project I've built has come from figuring things out on my own.</p>
@@ -299,7 +300,23 @@ ${items.join('\n')}
 `;
 }
 
-const robotsTxt = () => `User-agent: *
+// AI search crawlers (ChatGPT, Google AI Mode / Gemini, Perplexity, Claude). Each needs its own
+// group: robots.txt groups don't merge, the most specific matching group wins — so each one has
+// to repeat the /admin block to keep the admin panel out of reach.
+const AI_CRAWLERS = [
+  'GPTBot',
+  'OAI-SearchBot',
+  'ChatGPT-User',
+  'ClaudeBot',
+  'Google-Extended',
+  'PerplexityBot',
+];
+
+const robotsTxt = () => `${AI_CRAWLERS.map(
+  (bot) => `User-agent: ${bot}\nAllow: /\nDisallow: /admin`,
+).join('\n\n')}
+
+User-agent: *
 Allow: /
 Disallow: /admin
 

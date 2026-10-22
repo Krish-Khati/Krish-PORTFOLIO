@@ -10,6 +10,7 @@ import {
   DEFAULT_OG_ALT,
   DEFAULT_OG_IMAGE,
   DEFAULT_TITLE,
+  PERSON_DESCRIPTION,
   postPath,
   SITE_NAME,
   SITE_URL,
@@ -78,8 +79,8 @@ function personJsonLd(s: PublicSettings): JsonLd {
     ...(s.aboutPhoto && !s.aboutPhoto.startsWith("data:")
       ? { image: absoluteUrl(s.aboutPhoto) }
       : {}),
-    jobTitle: "AI Developer",
-    description: s.tagline,
+    jobTitle: "Software Developer",
+    description: PERSON_DESCRIPTION,
     ...(parts.length >= 2
       ? {
           address: {
@@ -106,12 +107,11 @@ function personJsonLd(s: PublicSettings): JsonLd {
   };
 }
 
+// Every page ships the full Person node (see personJsonLd), so author/publisher/creator only
+// point at it by @id instead of repeating a second, thinner Person.
 const personRef = () => ({
   "@type": "Person",
   "@id": PERSON_ID,
-  name: SITE_NAME,
-  url: SITE_URL,
-  sameAs: [GITHUB_PROFILE],
 });
 
 function breadcrumbJsonLd(items: { name: string; path: string }[]): JsonLd {
@@ -176,7 +176,7 @@ export function faqPageMeta(s: PublicSettings): PageMeta {
     description:
       "Answers to common questions about my tech stack, projects (JARVIS, Yojana Saathi), availability for work, digital marketing services, and where to find my work.",
     path: "/faq",
-    jsonLd: [faqPageJsonLd()],
+    jsonLd: [personJsonLd(s), faqPageJsonLd()],
   };
 }
 
@@ -188,6 +188,7 @@ export function blogListMeta(posts: BlogPost[], s: PublicSettings): PageMeta {
       "Honest notes from a self-taught developer in Haryana: learning Python, C and C++, building projects, using AI tools well, and lessons from digital marketing.",
     path: "/blog",
     jsonLd: [
+      personJsonLd(s),
       {
         "@context": "https://schema.org",
         "@type": "Blog",
@@ -219,6 +220,7 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
       "Projects by Krish Khati, a self-taught developer: websites, a memory match game, a language-learning app and more, each built to learn something new. Code on GitHub.",
     path: "/projects",
     jsonLd: [
+      personJsonLd(s),
       {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
@@ -314,6 +316,7 @@ export function projectMeta(p: Project, s: PublicSettings): PageMeta {
       : {}),
     type: "website",
     jsonLd: [
+      personJsonLd(s),
       main,
       breadcrumbJsonLd([
         { name: "Home", path: "/" },
@@ -368,6 +371,7 @@ export function postMeta(post: BlogPost, s: PublicSettings): PageMeta {
   const faqs = post.faqs ?? [];
 
   const jsonLd: JsonLd[] = [
+    personJsonLd(s),
     {
       "@context": "https://schema.org",
       "@type": "BlogPosting",

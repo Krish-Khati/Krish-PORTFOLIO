@@ -1,8 +1,16 @@
-# Krish Khati | AI Developer
+# Krish Khati | Software Developer & AI Specialist
 
-> Krish Khati - AI Developer building AI-powered apps, chatbots and web projects: gym website design, memory match game, AI language translator and calculator app UI. Currently looking for an entry-level role or internship.
+> Krish Khati (also known as Krrish Dhiman) is a software developer and AI/digital marketing specialist based in Pundri, Haryana, India. He builds AI-powered tools, web applications, and automation projects, and works with Python, C, and modern AI APIs. Currently looking for an entry-level role or internship.
 
 The site is a single-page app with prerendered HTML for every public page. Content may be summarized and cited with a link back to the source page.
+
+## About
+
+- **Name**: Krish Khati (also known as Krrish Dhiman)
+- **Role**: Software Developer & AI/Digital Marketing Specialist
+- **Location**: Pundri, Kaithal, Haryana, India
+- **Stack**: Python, C, C++, JavaScript/TypeScript, React, Vite, Tailwind CSS, Supabase, LLM APIs (OpenAI, Gemini, Groq)
+- **Focus**: AI-powered tools, web applications, automation projects, SEO and digital marketing
 
 ## Profiles
 
