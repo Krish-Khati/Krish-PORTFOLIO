@@ -1,7 +1,7 @@
 import { Github, Instagram, Linkedin, Mail, X, Youtube } from "lucide-react";
 import { Link } from "wouter";
 import { useEffect, useState } from "react";
-import { GITHUB_PROFILE, INSTAGRAM_PROFILE, LINKEDIN_PROFILE } from "@/data/social";
+import { GITHUB_PROFILE, INSTAGRAM_PROFILE, LINKEDIN_PROFILE, YOUTUBE_PROFILE } from "@/data/social";
 
 const currentYear = new Date().getFullYear();
 
@@ -20,7 +20,7 @@ const socialLinks = [
   { icon: Linkedin, href: LINKEDIN_PROFILE, label: "LinkedIn" },
   { icon: X, href: "https://x.com/krish_khati", label: "X (Twitter)" },
   { icon: Instagram, href: INSTAGRAM_PROFILE, label: "Instagram" },
-  { icon: Youtube, href: "https://www.youtube.com/@krishkhati", label: "YouTube" },
+  { icon: Youtube, href: YOUTUBE_PROFILE, label: "YouTube" },
 ];
 
 export function SiteFooter() {

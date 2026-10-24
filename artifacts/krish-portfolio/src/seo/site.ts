@@ -7,17 +7,15 @@ export const SITE_NAME = 'Krish Khati';
 export const DEFAULT_TITLE = 'Krish Khati | Software Developer & AI Specialist';
 
 /**
- * Fact-dense identity block. It is the visible About-section paragraph, the meta/og description
- * and the paragraph in the prerendered static HTML — one string so they can never drift apart.
+ * Fact-dense identity block. It is the visible About-section paragraph, the paragraph in the
+ * prerendered static HTML and the Person JSON-LD description — one string so they can never drift.
  */
 export const IDENTITY_SUMMARY =
   'Krish Khati (also known as Krrish Dhiman) is a software developer and AI/digital marketing specialist based in Pundri, Haryana, India. He builds AI-powered tools, web applications, and automation projects, and works with Python, C, and modern AI APIs.';
 
-export const DEFAULT_DESCRIPTION = IDENTITY_SUMMARY;
-
-/** Short entity summary used for the JSON-LD Person node. */
-export const PERSON_DESCRIPTION =
-  'Software developer and AI/digital marketing specialist from Pundri, Haryana, India.';
+/** ~155-char snippet for <meta name="description"> and og:description, which search/social truncate. */
+export const DEFAULT_DESCRIPTION =
+  'Krish Khati (Krrish Dhiman) is a software developer and AI/digital marketing specialist in Pundri, Haryana, India. He builds AI-powered tools and web apps.';
 
 /** 1200×630 green/dark share image used when a page has no cover of its own. */
 export const DEFAULT_OG_IMAGE = '/og-default.png';

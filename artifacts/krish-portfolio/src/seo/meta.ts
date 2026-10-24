@@ -1,6 +1,11 @@
 import type { BlogPost } from "../data/blog";
 import { type Project, projectCover, projectPath } from "../data/projects";
-import { INSTAGRAM_PROFILE, GITHUB_PROFILE, LINKEDIN_PROFILE } from "../data/social";
+import {
+  INSTAGRAM_PROFILE,
+  GITHUB_PROFILE,
+  LINKEDIN_PROFILE,
+  YOUTUBE_PROFILE,
+} from "../data/social";
 import type { PublicSettings } from "../data/settings";
 import { escapeHtml, stripInline } from "./inline";
 import { faqs } from "@/data/faqs";
@@ -10,7 +15,7 @@ import {
   DEFAULT_OG_ALT,
   DEFAULT_OG_IMAGE,
   DEFAULT_TITLE,
-  PERSON_DESCRIPTION,
+  IDENTITY_SUMMARY,
   postPath,
   SITE_NAME,
   SITE_URL,
@@ -54,7 +59,14 @@ export function clip(text: string, max: number) {
 
 /** Social profile URLs worth listing — skips bare placeholders like "https://instagram.com". */
 export function sameAsLinks(s: Pick<PublicSettings, "youtube">) {
-  return [GITHUB_PROFILE, LINKEDIN_PROFILE, INSTAGRAM_PROFILE, s.youtube].filter((u) => {
+  const urls = [
+    GITHUB_PROFILE,
+    LINKEDIN_PROFILE,
+    INSTAGRAM_PROFILE,
+    YOUTUBE_PROFILE,
+    s.youtube,
+  ];
+  return [...new Set(urls)].filter((u) => {
     try {
       const url = new URL(u);
       return url.pathname.replace(/\/+$/, "").length > 1;
@@ -80,7 +92,7 @@ function personJsonLd(s: PublicSettings): JsonLd {
       ? { image: absoluteUrl(s.aboutPhoto) }
       : {}),
     jobTitle: "Software Developer",
-    description: PERSON_DESCRIPTION,
+    description: IDENTITY_SUMMARY,
     ...(parts.length >= 2
       ? {
           address: {

@@ -202,6 +202,14 @@ function Typewriter({ roles }: { roles: string[] }) {
   );
 }
 
+const STORY_PARAGRAPHS = [
+  "I’m from Pundri, Kaithal — no formal tech background, no coding classes, just curiosity and a laptop. I’ve now completed my Class 12, and the self-teaching that started alongside school hasn’t slowed down since.",
+  "I taught myself Python, C, and C++, then moved into web development and started exploring AI tools. Somewhere along the way, I also picked up Digital Marketing with AI, because I wanted to understand not just how to build things, but how to get them in front of people.",
+  "I call myself a vibe coder — I don’t always start with a textbook definition or a formal plan. I start with an idea, open my laptop, and build by feel: testing, breaking things, Googling the error, trying again. AI tools have become part of that process too, helping me move faster and think bigger, without replacing the problem-solving that’s mine to do.",
+  "Every project I’ve built has come from figuring things out on my own — late nights, tutorials, and a lot of trial and error until things finally worked.",
+  "I’m not chasing certificates — I’m chasing the ability to build things that actually work and reach the right people. With school behind me now, I’m looking for an entry-level role or internship where I can turn that self-taught, AI-assisted, vibe-coding mindset into real, usable software.",
+];
+
 function Home() {
   const settings = useSiteSettings();
   const { data: projectList = [] } = useProjects();
@@ -447,12 +455,13 @@ function Home() {
             </p>
             {/* Fact-dense identity block: the one paragraph that names him, his alias, his
                 location and his stack — so AI search engines can tell him apart from others. */}
-            <p
-              className="about-summary about-in about-rise"
+            <div
+              className="about-identity about-in about-rise"
               style={{ transitionDelay: ".6s" }}
             >
-              {IDENTITY_SUMMARY}
-            </p>
+              <h3 className="about-identity-label">About Krish</h3>
+              <p className="about-summary">{IDENTITY_SUMMARY}</p>
+            </div>
           </div>
           <div className="about-photo-wrap">
             <div className="about-glow" aria-hidden="true" />
@@ -513,30 +522,27 @@ function Home() {
         </div>
       </section>
 
-      <section className="section story-section">
+      <section
+        className="section story-section"
+        id="story"
+        aria-labelledby="story-heading"
+      >
         <div className="section-inner">
           <div className="story-label reveal">02 / My story</div>
-          <div className="story-card reveal reveal-delay-1">
-            <h2 className="story-heading">
+          <div className="story-card">
+            <h2 className="story-heading reveal" id="story-heading">
               <span className="story-bar" aria-hidden="true" />
               My Story
             </h2>
-            <p className="story-paragraph">
-              I'm a Class 12 student from Pundri, Kaithal - no formal tech
-              background, no coding classes. Just curiosity and a laptop.
-            </p>
-            <p className="story-paragraph">
-              I started teaching myself Python, C, and C++, then moved into web
-              development and exploring AI tools. Every project I've built has
-              come from figuring things out on my own - late nights, tutorials,
-              and a lot of trial and error.
-            </p>
-            <p className="story-paragraph">
-              I'm not chasing certificates - I'm chasing the ability to build
-              things that actually work. Right now, I'm looking for an
-              entry-level role or internship where I can turn that
-              problem-solving mindset into real software.
-            </p>
+            {STORY_PARAGRAPHS.map((paragraph, index) => (
+              <p
+                key={index}
+                className="story-paragraph reveal"
+                style={{ transitionDelay: `${0.1 + index * 0.07}s` }}
+              >
+                {paragraph}
+              </p>
+            ))}
           </div>
         </div>
       </section>
