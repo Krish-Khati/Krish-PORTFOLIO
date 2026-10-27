@@ -13,7 +13,7 @@ export type BlogPost = {
   excerpt: string;
   category: "Journey" | "Learning" | "Projects" | "AI" | "Marketing";
   date: string; // ISO yyyy-mm-dd
-  cover?: string; // cover image URL; posts without one get a themed gradient
+  cover?: string; // cover image URL; posts without one get a branded category fallback
   blocks: BlogBlock[];
   // SEO fields (supabase/add-seo.sql). All optional: empty means "fall back to title/excerpt".
   seoTitle?: string;
@@ -251,11 +251,27 @@ const bundledCovers = new Set([
   "build-python-voice-assistant",
 ]);
 
+// Branded category covers used when a post has no cover of its own. The automation sets these in
+// the database too, so the frontend and the pipeline agree on the same assets.
+const FALLBACK_COVERS: Record<string, string> = {
+  Journey: "fallback-journey.webp",
+  Learning: "fallback-learning.webp",
+  Projects: "fallback-projects.webp",
+  AI: "fallback-ai.webp",
+  Marketing: "fallback-marketing.webp",
+};
+
+const coverBase = () => import.meta.env?.BASE_URL ?? "/";
+
+export const fallbackCover = (category: string) =>
+  `${coverBase()}blog-covers/${FALLBACK_COVERS[category] ?? "fallback-default.webp"}`;
+
 export function withCover<T extends BlogPost>(post: T): T {
-  if (post.cover || !bundledCovers.has(post.slug)) return post;
-  // import.meta.env only exists inside Vite; the build-time prerender script runs outside it.
-  const base = import.meta.env?.BASE_URL ?? "/";
-  return { ...post, cover: `${base}blog-covers/${post.slug}.webp` };
+  if (post.cover) return post;
+  if (bundledCovers.has(post.slug)) {
+    return { ...post, cover: `${coverBase()}blog-covers/${post.slug}.webp` };
+  }
+  return { ...post, cover: fallbackCover(post.category) };
 }
 
 export function getPost(slug: string) {

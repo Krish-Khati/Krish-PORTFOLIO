@@ -10,10 +10,14 @@
  * For each post it searches using topic/category keywords, downloads the image as
  * <slug>.jpg and re-encodes to <slug>.webp (on-page <img> uses .webp; .jpg for social).
  *
+ * If no provider has a usable photo, it renders a branded cover from the post's title and
+ * category (same gradient/icon system as the shipped category fallbacks), so no card is left blank.
+ *
  * Posts are read from Supabase when VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY are set
  * in .env (so brand-new published posts are picked up automatically); otherwise it falls
- * back to the static list in src/data/blog.ts. Posts that already have a cover (local
- * files or DB cover column) are skipped. Newly added covers are registered in the
+ * back to the static list in src/data/blog.ts. Posts that already have a real cover (local
+ * files or DB cover column) are skipped; a category fallback is treated as provisional and
+ * upgraded to a photo or a generated per-post cover. Newly added covers are registered in the
  * bundledCovers set in src/data/blog.ts and credited in public/blog-covers/CREDITS.txt.
  *
  * Optional: with SUPABASE_SERVICE_ROLE_KEY set, also PATCHes the DB row for each post
@@ -29,6 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { blogPosts, type BlogPost } from '../src/data/blog';
+import { fallbackCoverPath, isFallbackCover, renderCoverSvg, writeCoverFiles } from './cover-art';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -286,6 +291,11 @@ function buildAlt(post: SourcePost, imageAlt: string, matchedQuery: string): str
   return alt.slice(0, 250); // reasonable alt length
 }
 
+/** Alt text for the generated cover, which is a graphic rather than a stock photo. */
+function fallbackAlt(post: SourcePost): string {
+  return `A dark green gradient cover with a ${post.category} icon for “${post.title}”`;
+}
+
 // ============================ DB SYNC (optional) ============================
 
 async function syncCoverToDb(post: SourcePost, webpPath: string, alt: string): Promise<void> {
@@ -354,10 +364,15 @@ async function main() {
 
     if (haveBoth && !force) {
       if (!registered.includes(post.slug)) registered.push(post.slug);
+      // A DB row can still be empty (or hold the category placeholder) when a previous run wrote
+      // the files but the DB sync failed. Point it at the per-post cover we already have.
+      if (syncDb && (!post.cover || isFallbackCover(post.cover))) {
+        await syncCoverToDb(post, `/blog-covers/${post.slug}.webp`, post.coverAlt || fallbackAlt(post));
+      }
       console.log(`skip   ${post.slug} (already has cover)`);
       continue;
     }
-    if (post.cover && !force) {
+    if (post.cover && !isFallbackCover(post.cover) && !force) {
       console.log(`skip   ${post.slug} (cover set in admin)`);
       continue;
     }
@@ -383,7 +398,20 @@ async function main() {
     }
 
     if (!match) {
-      console.warn(`miss   ${post.slug} (no result from any provider)`);
+      // No provider had a usable photo. Render a branded cover from the post's title and category
+      // instead of leaving the card blank; the static category cover remains as a last resort.
+      try {
+        const svg = renderCoverSvg({ title: post.title, category: post.category });
+        await writeCoverFiles(svg, jpg, webp);
+        if (!registered.includes(post.slug)) registered.push(post.slug);
+        if (syncDb) await syncCoverToDb(post, `/blog-covers/${post.slug}.webp`, fallbackAlt(post));
+        console.log(`fallback ${post.slug} (generated branded cover)`);
+      } catch (err) {
+        console.error(`fallback error ${post.slug}: ${err instanceof Error ? err.message : String(err)}`);
+        if (syncDb && !post.cover) {
+          await syncCoverToDb(post, fallbackCoverPath(post.category), fallbackAlt(post));
+        }
+      }
       continue;
     }
 

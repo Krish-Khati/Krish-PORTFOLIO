@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { type Schema, Type } from '@google/genai';
 import { pickModelOrder, type ModelChoice } from './ai-model-picker';
 import { generateOnce, newBreakerState, parseModelChoice, parseModelChoiceList } from './ai-generate';
+import { fallbackCoverFor } from './covers';
 import {
   type Block, cleanFaqs, containsKeyword, type Faq, fitCoverAlt, fitMetaDescription, fitTitle, fixInternalLinks,
   type LinkTarget, normalizeKeyword, OPTIONAL_POST_COLUMNS, SEO_TITLE_MAX, shortSlug, stripLinks, triggerDeployHook,
@@ -23,6 +24,10 @@ import {
  * in code (seo.ts); the keyword placement is checked too, with one retry if the model missed it.
  * When the post is published automatically, the Vercel Deploy Hook rebuilds the site so the post
  * gets its prerendered page + sitemap/RSS entry (and that build pings IndexNow).
+ *
+ * Every post is saved with its category's branded fallback cover, so the card is never blank. The
+ * fetch-covers step that follows replaces it with a real photo when one is available, or with a
+ * generated per-post cover carrying the post title and category icon.
  *
  * Also runnable by hand via the "Run workflow" button on the GitHub Actions tab, or locally with
  * GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set (GROQ_API_KEY and
@@ -404,7 +409,15 @@ async function main() {
   // '*' so this keeps working whether or not optional columns exist yet.
   const { data: existingPosts, error: postsError } = await supabase.from('posts').select('*').order('date', { ascending: false });
   if (postsError) throw new Error(`Could not read existing posts: ${postsError.message}`);
-  const rows = (existingPosts ?? []) as { title: string; slug: string; category: string; excerpt: string; status: string }[];
+  const rows = (existingPosts ?? []) as { title: string; slug: string; category: string; excerpt: string; status: string; cover?: string | null }[];
+  // Older posts created before the fallback existed can still have an empty cover. Fill those in
+  // on every run so the whole archive stays visually consistent; a real cover is never touched.
+  const missingCovers = rows.filter((p) => !p.cover?.trim());
+  for (const post of missingCovers) {
+    const { error } = await supabase.from('posts').update({ cover: fallbackCoverFor(post.category) }).eq('slug', post.slug);
+    if (error) console.warn(`Could not backfill a cover for "${post.title}": ${error.message}`);
+  }
+  if (missingCovers.length) console.log(`Backfilled fallback covers for ${missingCovers.length} existing post(s).`);
   const existingTitles = rows.map((p) => p.title);
   // Only published posts are linkable (a draft's URL isn't public). Same category first.
   const published = rows.filter((p) => p.status === 'published');
@@ -457,7 +470,7 @@ async function main() {
         date: today,
         status,
         blocks: generated.blocks,
-        cover: '',
+        cover: fallbackCoverFor(generated.category),
         seo_title: generated.seoTitle,
         meta_description: generated.metaDescription,
         focus_keyword: generated.focusKeyword,

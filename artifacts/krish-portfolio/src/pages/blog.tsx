@@ -6,7 +6,7 @@ import {
 import { Link } from 'wouter';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
-import { formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
+import { fallbackCover, formatPostDate, readingMinutes, type BlogPost } from '@/data/blog';
 import { usePublishedPosts, useSiteSettings } from '@/data/live';
 import { GITHUB_PROFILE } from '@/data/social';
 import { imageSrcSet, resizedImage } from '@/lib/image';
@@ -29,12 +29,16 @@ const categoryIcon = (c: string) => CATEGORY_ICONS[c] ?? Tag;
 const SLIDE_MS = 5000;
 
 function PostCover({ post, className }: { post: BlogPost; className: string }) {
-  const { cover } = post;
   const Icon = categoryIcon(post.category);
+  const src = post.cover || fallbackCover(post.category);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [src]);
+
   return (
     <div className={className}>
-      {cover ? (
-        <img src={resizedImage(cover, 640)} srcSet={imageSrcSet(cover, [400, 640, 960])} sizes="(max-width: 720px) 92vw, 480px" width="1200" height="675" alt={post.coverAlt || post.title} loading="lazy" decoding="async" />
+      {!failed ? (
+        <img src={resizedImage(src, 640)} srcSet={imageSrcSet(src, [400, 640, 960])} sizes="(max-width: 720px) 92vw, 480px" width="1200" height="675" alt={post.coverAlt || post.title} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
         <div className="bx-cover-fallback" aria-hidden="true">
           <Icon size={46} strokeWidth={1.4} />

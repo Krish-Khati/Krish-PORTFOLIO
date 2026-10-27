@@ -8,6 +8,7 @@
     "build": "vite build --config vite.config.ts && tsx scripts/prerender.ts",
     "prerender": "tsx scripts/prerender.ts",
     "fetch-covers": "tsx scripts/fetch-blog-covers.ts",
+    "generate-fallback-covers": "tsx scripts/generate-fallback-covers.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
