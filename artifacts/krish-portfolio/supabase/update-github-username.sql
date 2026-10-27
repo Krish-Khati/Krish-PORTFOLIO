@@ -15,7 +15,7 @@ set data = data || '{
   "name": "Krish Khati",
   "github": "https://github.com/krish-khati",
   "instagram": "https://www.instagram.com/krish_khati_/",
-  "linkedin": "https://www.linkedin.com/in/krish-khati/"
+  "linkedin": "https://www.linkedin.com/in/krish-khati-b0775a239/"
 }'::jsonb
 where id = 1;
 
