@@ -10,7 +10,7 @@ A full-stack personal portfolio with a Supabase-backed admin panel, an auto-post
 
 🔗 **Live site:** [krish-portfolio-dev.vercel.app](https://krish-portfolio-dev.vercel.app)
 
-🔗 **Connect:** [LinkedIn](https://www.linkedin.com/in/krish-khati-b0775a239/) · [GitHub](https://github.com/krish-khati)
+🔗 **Connect:** [LinkedIn](https://www.linkedin.com/in/krish-khati/) · [GitHub](https://github.com/krish-khati)
 
 ---
 

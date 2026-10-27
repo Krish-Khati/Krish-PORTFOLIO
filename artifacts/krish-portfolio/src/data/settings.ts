@@ -24,7 +24,7 @@ export const defaultPublicSettings: PublicSettings = {
   location: 'Pundri, Kaithal, Haryana, India',
   roles: ['Web Developer', 'Digital Marketer', 'AI Enthusiast'],
   instagram: 'https://www.instagram.com/krish_khati_/',
-  linkedin: 'https://www.linkedin.com/in/krish-khati-b0775a239/',
+  linkedin: 'https://www.linkedin.com/in/krish-khati/',
   youtube: 'https://youtube.com',
   github: 'https://github.com/krish-khati',
   heroImage: '',

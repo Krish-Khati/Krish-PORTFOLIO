@@ -2,7 +2,7 @@
 
 *AI Developer*
 
-Pundri, Kaithal, Haryana | krrishai0916@gmail.com | +91 93060 91154 | [github.com/krish-khati](https://github.com/krish-khati) | [linkedin.com/in/krish-khati-b0775a239](https://www.linkedin.com/in/krish-khati-b0775a239/) | [krish-portfolio-dev.vercel.app](https://krish-portfolio-dev.vercel.app/)
+Pundri, Kaithal, Haryana | krrishai0916@gmail.com | +91 93060 91154 | [github.com/krish-khati](https://github.com/krish-khati) | [linkedin.com/in/krish-khati](https://www.linkedin.com/in/krish-khati/) | [krish-portfolio-dev.vercel.app](https://krish-portfolio-dev.vercel.app/)
 
 ---
 

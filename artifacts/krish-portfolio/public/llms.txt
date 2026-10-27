@@ -15,7 +15,7 @@ The site is a single-page app with prerendered HTML for every public page. Conte
 ## Profiles
 
 - [GitHub](https://github.com/krish-khati)
-- [LinkedIn](https://www.linkedin.com/in/krish-khati-b0775a239/)
+- [LinkedIn](https://www.linkedin.com/in/krish-khati/)
 - [Instagram](https://www.instagram.com/krish_khati_/)
 
 ## Main pages

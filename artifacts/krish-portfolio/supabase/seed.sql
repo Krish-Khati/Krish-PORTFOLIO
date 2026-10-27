@@ -18,5 +18,5 @@ select * from (values
 ) as v(name, description, url, position)
 where not exists (select 1 from projects);
 
-insert into site_settings (id, data) values (1, '{"name":"Krish","tagline":"I''m passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.","email":"krrishai0916@gmail.com","phone":"+91 93060 91154","location":"Pundri, Kaithal, Haryana, India","roles":["Web Developer","Digital Marketer","AI Enthusiast"],"instagram":"https://instagram.com","linkedin":"https://www.linkedin.com/in/krish-khati-b0775a239/","youtube":"https://youtube.com","github":"https://github.com/krish-khati"}'::jsonb)
+insert into site_settings (id, data) values (1, '{"name":"Krish","tagline":"I''m passionate about creating modern web experiences, exploring the power of AI and digital marketing, and building things that make an impact.","email":"krrishai0916@gmail.com","phone":"+91 93060 91154","location":"Pundri, Kaithal, Haryana, India","roles":["Web Developer","Digital Marketer","AI Enthusiast"],"instagram":"https://instagram.com","linkedin":"https://www.linkedin.com/in/krish-khati/","youtube":"https://youtube.com","github":"https://github.com/krish-khati"}'::jsonb)
 on conflict (id) do nothing;
