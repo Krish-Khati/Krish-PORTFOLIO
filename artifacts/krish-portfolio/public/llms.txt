@@ -30,6 +30,7 @@ The site is a single-page app with prerendered HTML for every public page. Conte
 - [LinguaBridge](https://krish-portfolio-dev.vercel.app/projects/linguabridge)
 - [Fitness Temple](https://krish-portfolio-dev.vercel.app/projects/fitness-temple)
 - [Calculator](https://krish-portfolio-dev.vercel.app/projects/calculator)
+- [Zedking Messenger Bot](https://krish-portfolio-dev.vercel.app/projects/zedking-messenger-bot)
 
 ## Machine-readable
 
