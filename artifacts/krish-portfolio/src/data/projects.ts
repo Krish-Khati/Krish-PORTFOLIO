@@ -179,6 +179,7 @@ The repo ships with offline tests (node --test) that need no network and no toke
     github_url: 'https://github.com/Krish-Khati/NovaChat',
     live_url: 'https://nova-chat-blue.vercel.app/',
     tech_stack: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'Zustand', 'Framer Motion'],
+    gallery: [shot('/projects/novachat.png', 'NovaChat dark-first interface with Good afternoon Krish greeting, New chat sidebar, Ask NovaChat composer with Search and Think toggles and suggestion chips', 1440, 1000)],
     features: [
       'Streaming chat over Groq with SSE phases, markdown and code highlighting',
       'Voice-to-voice conversation: Cartesia TTS/STT with VAD endpointing and barge-in',
