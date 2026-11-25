@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts && tsx scripts/prerender.ts",
+    "build": "vite build --config vite.config.ts && tsx scripts/prerender.ts && tsx scripts/validate-seo.ts",
     "prerender": "tsx scripts/prerender.ts",
+    "validate:seo": "tsx scripts/validate-seo.ts",
     "fetch-covers": "tsx scripts/fetch-blog-covers.ts",
     "generate-fallback-covers": "tsx scripts/generate-fallback-covers.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",

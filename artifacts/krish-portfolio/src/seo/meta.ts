@@ -209,12 +209,17 @@ export function blogListMeta(posts: BlogPost[], s: PublicSettings): PageMeta {
         url: absoluteUrl("/blog"),
         inLanguage: "en",
         author: personRef(),
-        blogPost: posts.slice(0, 20).map((p) => ({
-          "@type": "BlogPosting",
-          headline: p.title,
-          url: absoluteUrl(postPath(p.slug)),
-          datePublished: p.date,
-        })),
+        // Omitted when every post is still a draft — an empty blogPost array is a dead field.
+        ...(posts.length
+          ? {
+              blogPost: posts.slice(0, 20).map((p) => ({
+                "@type": "BlogPosting",
+                headline: p.title,
+                url: absoluteUrl(postPath(p.slug)),
+                datePublished: p.date,
+              })),
+            }
+          : {}),
       },
       breadcrumbJsonLd([
         { name: "Home", path: "/" },
@@ -228,8 +233,10 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
   return {
     ...defaults,
     title: "Projects — Krish Khati | Things Built to Learn",
-    description:
+    description: clip(
       "Projects by Krish Khati, a self-taught developer: websites, a memory match game, a language-learning app and more, each built to learn something new. Code on GitHub.",
+      160,
+    ),
     path: "/projects",
     jsonLd: [
       personJsonLd(s),
@@ -239,15 +246,20 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
         name: "Projects by Krish Khati",
         url: absoluteUrl("/projects"),
         author: personRef(),
-        mainEntity: {
-          "@type": "ItemList",
-          itemListElement: projects.map((p, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            url: absoluteUrl(projectPath(p.slug)),
-            name: p.name,
-          })),
-        },
+        // Only when there is something to list — an empty ItemList would ship as a dead field.
+        ...(projects.length
+          ? {
+              mainEntity: {
+                "@type": "ItemList",
+                itemListElement: projects.map((p, i) => ({
+                  "@type": "ListItem",
+                  position: i + 1,
+                  url: absoluteUrl(projectPath(p.slug)),
+                  name: p.name,
+                })),
+              },
+            }
+          : {}),
       },
       breadcrumbJsonLd([
         { name: "Home", path: "/" },
@@ -257,7 +269,7 @@ export function projectsMeta(projects: Project[], s: PublicSettings): PageMeta {
   };
 }
 
-export const projectSeoTitle = (p: Project) => `${p.name} – Krish Khati`;
+export const projectSeoTitle = (p: Project) => clip(`${p.name} – Krish Khati`, 60);
 
 export const projectMetaDescription = (p: Project) =>
   clip(
@@ -346,7 +358,7 @@ export function firstParagraph(post: Pick<BlogPost, "blocks">) {
 }
 
 export const postSeoTitle = (post: BlogPost) => {
-  if (post.seoTitle?.trim()) return post.seoTitle.trim();
+  if (post.seoTitle?.trim()) return clip(post.seoTitle, 60);
   const withName = `${post.title} — Krish Khati`;
   return withName.length <= 60 ? withName : clip(post.title, 60);
 };
